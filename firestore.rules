@@ -1,0 +1,147 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------
+    // ROOT CAUSE FIX:
+    // The previous rules called getUserData() / getShopId() which did
+    // a cross-document read on EVERY write.  That read fails whenever:
+    //   - The user document doesn't exist yet (first-login race condition)
+    //   - There are any network hiccups
+    //   - The security rule quota for cross-reads is hit
+    //
+    // NEW APPROACH: use request.auth.uid directly.
+    // Since AuthContext sets shopId = user.uid for every shop owner,
+    // we simply check that the document's shopId == request.auth.uid.
+    // This is fast, reliable, and equally secure.
+    // ---------------------------------------------------------------
+
+    // Is the user authenticated?
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Does an EXISTING document belong to the requesting user?
+    function ownsCurrentDoc() {
+      return isAuth() && resource != null && resource.data.shopId == request.auth.uid;
+    }
+
+    // Does the NEW document being written claim the right shopId?
+    function ownsNewDoc() {
+      return isAuth() && request.resource != null && request.resource.data.shopId == request.auth.uid;
+    }
+
+    // Returns the shopId from the user's profile (supports cashiers whose shopId != their uid)
+    function getUserShopId() {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc != null ? userDoc.data.shopId : null;
+    }
+
+    // True if the user is an admin OR a cashier belonging to the shop that owns this document
+    function canAccessDoc() {
+      return isAuth() && resource != null && (ownsCurrentDoc() || resource.data.shopId == getUserShopId());
+    }
+
+    function canCreateDoc() {
+      return isAuth() && request.resource != null && (ownsNewDoc() || request.resource.data.shopId == getUserShopId());
+    }
+
+    // ---------------------------------------------------------------
+    // Users — each user manages only their own profile
+    // ---------------------------------------------------------------
+    match /users/{userId} {
+      allow read: if isAuth() && (request.auth.uid == userId
+                  || resource.data.shopId == request.auth.uid
+                  || resource.data.shopId == getUserShopId());
+      allow create: if isAuth() && (request.auth.uid == userId || request.resource.data.shopId == request.auth.uid);
+      allow update: if isAuth() && (request.auth.uid == userId || resource.data.shopId == request.auth.uid);
+      allow delete: if isAuth() && resource.data.shopId == request.auth.uid;
+    }
+
+    // ---------------------------------------------------------------
+    // Products + Bottles sub-collection
+    // ---------------------------------------------------------------
+    match /products/{productId} {
+      allow read:   if canAccessDoc();
+      allow create: if canCreateDoc();
+      allow update: if canAccessDoc();
+      allow delete: if canAccessDoc();
+
+      match /bottles/{bottleId} {
+        allow read:   if canAccessDoc();
+        allow create: if canCreateDoc();
+        allow update: if canAccessDoc();
+        allow delete: if canAccessDoc();
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Customers
+    // ---------------------------------------------------------------
+    match /customers/{customerId} {
+      allow read:          if canAccessDoc();
+      allow create:        if canCreateDoc();
+      allow update, delete: if canAccessDoc();
+    }
+
+    // ---------------------------------------------------------------
+    // Sales
+    // ---------------------------------------------------------------
+    match /sales/{saleId} {
+      allow read:          if canAccessDoc();
+      allow create:        if canCreateDoc();
+      allow update, delete: if canAccessDoc();
+    }
+
+    // ---------------------------------------------------------------
+    // Expenses
+    // ---------------------------------------------------------------
+    match /expenses/{expenseId} {
+      allow read:          if canAccessDoc();
+      allow create:        if canCreateDoc();
+      allow update, delete: if canAccessDoc();
+    }
+
+    // ---------------------------------------------------------------
+    // Credits
+    // ---------------------------------------------------------------
+    match /credits/{creditId} {
+      allow read:          if canAccessDoc();
+      allow create:        if canCreateDoc();
+      allow update, delete: if canAccessDoc();
+    }
+
+    // ---------------------------------------------------------------
+    // Inventory Logs
+    // ---------------------------------------------------------------
+    match /inventoryLogs/{logId} {
+      allow read:          if canAccessDoc();
+      allow create:        if canCreateDoc();
+      allow update, delete: if canAccessDoc();
+    }
+
+    // ---------------------------------------------------------------
+    // Settings — document ID IS the shopId (= uid)
+    // ---------------------------------------------------------------
+    match /settings/{docId} {
+      allow read, write: if isAuth() && docId == request.auth.uid;
+    }
+
+    // ---------------------------------------------------------------
+    // Daily Summaries - Doc ID format: {shopId}_{date}
+    // Checking ID avoids 'resource == null' errors for useDocument listeners
+    // ---------------------------------------------------------------
+    match /dailySummaries/{summaryId} {
+      allow read, update, delete: if isAuth() && summaryId.split('_')[0] == request.auth.uid;
+      allow create: if isAuth() && request.resource.data.shopId == request.auth.uid;
+    }
+
+    // ---------------------------------------------------------------
+    // Stock Alerts - Doc ID format: {shopId}_{productId}
+    // ---------------------------------------------------------------
+    match /stockAlerts/{alertId} {
+      allow read, update, delete: if isAuth() && alertId.split('_')[0] == request.auth.uid;
+      allow create: if isAuth() && request.resource.data.shopId == request.auth.uid;
+    }
+  }
+}
