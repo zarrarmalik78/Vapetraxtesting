@@ -19,9 +19,14 @@ import {
   UserPlus,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  Smartphone,
+  CheckCircle2,
+  Info,
+  Download
 } from 'lucide-react';
 import { useFirestore, useDocument } from '../hooks/useFirestore';
+import { usePWA } from '../hooks/usePWA';
 import { db } from '../firebase';
 import { doc, setDoc, updateDoc, serverTimestamp, where } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,6 +38,7 @@ const Settings: React.FC = () => {
   const { shopId, currentUser, createCashier, deleteCashier, resetPassword } = useAuth();
   const { document: settings, loading } = useDocument<any>(shopId ? 'settings' : null, shopId ? (shopId || 'shop_settings') : null);
   const { document: adminUser } = useDocument<any>('users', currentUser?.uid || '___none___');
+  const { canInstall, isStandalone, promptInstall } = usePWA();
   const [activeTab, setActiveTab] = useState('shop');
   const [formData, setFormData] = useState<any>(null);
   const [adminForm, setAdminForm] = useState({ name: '', email: '' });
@@ -170,6 +176,12 @@ const Settings: React.FC = () => {
             onClick={() => setActiveTab('security')} 
             icon={<Shield size={18} />} 
             label="User Management" 
+          />
+          <SettingsNavButton 
+            active={activeTab === 'mobile'} 
+            onClick={() => setActiveTab('mobile')} 
+            icon={<Smartphone size={18} />} 
+            label="Mobile App" 
           />
         </div>
 
@@ -400,6 +412,90 @@ const Settings: React.FC = () => {
               onSaveAdmin={handleAdminSave}
               onResetPassword={resetPassword}
             />
+          )}
+
+          {activeTab === 'mobile' && (
+            <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-6">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <Smartphone size={20} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 tracking-tight">Mobile Application</h3>
+              </div>
+
+              <div className="bg-gradient-to-br from-violet-600 to-fuchsia-600 rounded-2xl p-8 text-white shadow-xl shadow-violet-600/20 relative overflow-hidden">
+                <div className="relative z-10 space-y-4 max-w-lg">
+                  <h4 className="text-2xl font-bold">Install VapeTrax on your phone</h4>
+                  <p className="text-violet-50 text-sm leading-relaxed">
+                    Access your shop management system directly from your home screen just like a native app.
+                    Loads faster, works offline for basic tasks, and provides a full-screen experience.
+                  </p>
+                  
+                  {isStandalone ? (
+                    <div className="flex items-center gap-2 py-2 px-4 bg-white/20 backdrop-blur-md rounded-xl w-fit">
+                      <CheckCircle2 size={20} />
+                      <span className="font-bold text-sm">Already Installed</span>
+                    </div>
+                  ) : canInstall ? (
+                    <button 
+                      onClick={promptInstall}
+                      className="flex items-center gap-2 px-6 py-3 bg-white text-violet-600 font-bold text-sm uppercase tracking-widest rounded-xl shadow-lg hover:bg-violet-50 transition-all active:scale-[0.98]"
+                    >
+                      <Download size={20} />
+                      Install Now
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2 py-2 px-4 bg-white/10 backdrop-blur-md rounded-xl text-xs">
+                      <Info size={16} />
+                      <span>Follow instructions below to install manually</span>
+                    </div>
+                  )}
+                </div>
+                <Smartphone className="absolute -right-8 -bottom-8 w-48 h-48 opacity-20 transform rotate-12" />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+                <div className="space-y-4">
+                  <h5 className="font-bold text-slate-900 flex items-center gap-2 uppercase text-xs tracking-widest text-slate-400">
+                    Android Instructions
+                  </h5>
+                  <ol className="space-y-3">
+                    <li className="flex items-start gap-3">
+                      <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">1</span>
+                      <p className="text-sm text-slate-600">Open Chrome and navigate to this URL</p>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">2</span>
+                      <p className="text-sm text-slate-600">Tap the three dots (⋮) in the top right</p>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">3</span>
+                      <p className="text-sm text-slate-600">Select "Install App" or "Add to Home Screen"</p>
+                    </li>
+                  </ol>
+                </div>
+
+                <div className="space-y-4">
+                  <h5 className="font-bold text-slate-900 flex items-center gap-2 uppercase text-xs tracking-widest text-slate-400">
+                    iOS (iPhone/iPad) Instructions
+                  </h5>
+                  <ol className="space-y-3">
+                    <li className="flex items-start gap-3">
+                      <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">1</span>
+                      <p className="text-sm text-slate-600">Open Safari and navigate to this URL</p>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">2</span>
+                      <p className="text-sm text-slate-600">Tap the Share button 􀈂 at the bottom</p>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">3</span>
+                      <p className="text-sm text-slate-600">Scroll down and tap "Add to Home Screen"</p>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>
