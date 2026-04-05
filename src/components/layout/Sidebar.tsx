@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Package, 
-  ShoppingCart, 
-  History, 
-  Users, 
-  CreditCard, 
-  Factory, 
-  Download, 
-  DollarSign, 
-  BarChart3, 
-  FileText, 
-  ClipboardList, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Package,
+  ShoppingCart,
+  History,
+  Users,
+  CreditCard,
+  Factory,
+  Download,
+  DollarSign,
+  BarChart3,
+  FileText,
+  ClipboardList,
+  Settings,
   LogOut,
   Menu,
   X,
@@ -72,7 +72,7 @@ const Sidebar: React.FC = () => {
   return (
     <>
       {/* Mobile Menu Button */}
-      <button 
+      <button
         className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-violet-600 rounded-lg text-white"
         onClick={() => setMobileOpen(!mobileOpen)}
       >
@@ -81,7 +81,7 @@ const Sidebar: React.FC = () => {
 
       {/* Sidebar Overlay */}
       {mobileOpen && (
-        <div 
+        <div
           className="lg:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
           onClick={() => setMobileOpen(false)}
         />
@@ -108,7 +108,7 @@ const Sidebar: React.FC = () => {
                 <span className="text-lg font-bold text-slate-900 tracking-tight">{shopName}</span>
               </div>
             )}
-            <button 
+            <button
               className="hidden lg:block p-1.5 hover:bg-slate-100 rounded-lg text-slate-400"
               onClick={() => setCollapsed(!collapsed)}
             >
@@ -147,8 +147,8 @@ const Sidebar: React.FC = () => {
               end={item.path === '/'}
               className={({ isActive }) => cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group",
-                isActive 
-                  ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20" 
+                isActive
+                  ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20"
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               )}
               onClick={() => setMobileOpen(false)}
@@ -172,8 +172,8 @@ const Sidebar: React.FC = () => {
               end={item.path === '/'}
               className={({ isActive }) => cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group",
-                isActive 
-                  ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20" 
+                isActive
+                  ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20"
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               )}
               onClick={() => setMobileOpen(false)}
@@ -196,8 +196,8 @@ const Sidebar: React.FC = () => {
               to="/settings"
               className={({ isActive }) => cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group",
-                isActive 
-                  ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20" 
+                isActive
+                  ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20"
                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               )}
               onClick={() => setMobileOpen(false)}

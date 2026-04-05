@@ -1,29 +1,33 @@
 import React from 'react';
-import { 
-  Package, 
-  ShoppingCart, 
-  DollarSign, 
+import {
+  Package,
+  ShoppingCart,
+  DollarSign,
   TrendingUp,
   Activity,
   Clock,
+  Database,
+  RefreshCw,
+  Banknote,
+  TrendingDown,
   AlertTriangle,
   FileDown,
-  Database,
-  RefreshCw
+  Calendar
 } from 'lucide-react';
+import { getSalesCogs } from '../lib/finance';
 import { seedSampleData } from '../lib/seedData';
 import toast from 'react-hot-toast';
 import { useFirestore } from '../hooks/useFirestore';
 import { useNotifications } from '../contexts/NotificationContext';
 import { formatCurrency, cn } from '../lib/utils';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
   Cell,
   AreaChart,
   Area
@@ -38,8 +42,11 @@ const Dashboard: React.FC = () => {
   const { shopId } = useAuth();
   const { documents: products, loading: productsLoading } = useFirestore<any>(shopId ? 'products' : null, where('shopId', '==', shopId));
   const { documents: sales, loading: salesLoading } = useFirestore<any>(shopId ? 'sales' : null, where('shopId', '==', shopId));
+  const { documents: expenses, loading: expensesLoading } = useFirestore<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId));
   const { activeAlerts } = useNotifications();
   const [seeding, setSeeding] = React.useState(false);
+  const [startDateStr, setStartDateStr] = React.useState('');
+  const [endDateStr, setEndDateStr] = React.useState('');
 
   const handleSeedData = async () => {
     if (seeding) return;
@@ -67,47 +74,87 @@ const Dashboard: React.FC = () => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   })();
 
-  if (productsLoading || salesLoading) {
+  if (productsLoading || salesLoading || expensesLoading) {
     return <LoadingSpinner />;
   }
 
-  // Calculate stats
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Calculate business day (5 AM offset for late night shops)
+  const getBusinessDay = (date: Date) => {
+    const d = new Date(date);
+    if (d.getHours() < 5) d.setDate(d.getDate() - 1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
 
-  const todaySales = sales.filter(s => {
-    const saleDate = toDisplayDate(s.saleDate, s.saleDateClient);
-    if (!saleDate) return false;
-    return saleDate >= today;
+  const currentBusinessDay = getBusinessDay(new Date());
+
+  const thisWeekBusiness = new Date(currentBusinessDay);
+  const currentDay = thisWeekBusiness.getDay() || 7;
+  thisWeekBusiness.setDate(thisWeekBusiness.getDate() - currentDay + 1);
+
+  const thisMonthBusiness = new Date(currentBusinessDay);
+  thisMonthBusiness.setDate(1);
+
+  const targetStartDate = startDateStr ? new Date(startDateStr) : currentBusinessDay;
+  const targetEndDate = endDateStr ? new Date(endDateStr) : currentBusinessDay;
+  targetStartDate.setHours(0, 0, 0, 0);
+  targetEndDate.setHours(0, 0, 0, 0);
+
+  const isCustomDate = startDateStr || endDateStr;
+  const cardPrefix = isCustomDate ? "SELECTED" : "TODAY'S";
+
+  // Sales filtering by business day
+  const periodSales = sales.filter(s => {
+    const d = toDisplayDate(s.saleDate, s.saleDateClient);
+    if (!d) return false;
+    const bDay = getBusinessDay(d).getTime();
+    return bDay >= targetStartDate.getTime() && bDay <= targetEndDate.getTime();
   });
 
-  const todayRevenue = todaySales.reduce((acc, s) => acc + (s.totalAmount || 0), 0);
-  
-  // Monthly revenue
-  const thisMonth = new Date();
-  thisMonth.setDate(1);
-  thisMonth.setHours(0, 0, 0, 0);
-  const monthlyRevenue = sales
-    .filter(s => {
-      const d = toDisplayDate(s.saleDate, s.saleDateClient);
-      return d ? d >= thisMonth : false;
-    })
-    .reduce((acc, s) => acc + (s.totalAmount || 0), 0);
+  const weeklySales = sales.filter(s => {
+    const d = toDisplayDate(s.saleDate, s.saleDateClient);
+    return d && getBusinessDay(d).getTime() >= thisWeekBusiness.getTime();
+  });
 
-  // Sales Trend Data (Last 30 days)
+  const monthlySales = sales.filter(s => {
+    const d = toDisplayDate(s.saleDate, s.saleDateClient);
+    return d && getBusinessDay(d).getTime() >= thisMonthBusiness.getTime();
+  });
+
+  // Revenue & Profit
+  const periodRevenue = periodSales.reduce((acc, s) => acc + (s.totalAmount || 0), 0);
+  const periodCogs = getSalesCogs(periodSales, products);
+  const periodProfit = periodRevenue - periodCogs;
+
+  const periodCash = periodSales.filter(s => s.paymentMethod === 'cash').reduce((acc, s) => acc + (s.totalAmount || 0), 0);
+  const periodOnline = periodSales.filter(s => (s.paymentMethod === 'online' || s.paymentMethod === 'credit')).reduce((acc, s) => acc + (s.totalAmount || 0), 0);
+
+  const periodExpense = expenses.filter(e => {
+    const d = toDisplayDate(e.expenseDate, e.createdAtClient);
+    if (!d) return false;
+    const bDay = getBusinessDay(d).getTime();
+    return bDay >= targetStartDate.getTime() && bDay <= targetEndDate.getTime();
+  }).reduce((acc, e) => acc + (e.amount || 0), 0);
+
+  const weeklyRevenue = weeklySales.reduce((acc, s) => acc + (s.totalAmount || 0), 0);
+  const weeklyCogs = getSalesCogs(weeklySales, products);
+  const weeklyProfit = weeklyRevenue - weeklyCogs;
+
+  const monthlyRevenue = monthlySales.reduce((acc, s) => acc + (s.totalAmount || 0), 0);
+  const monthlyCogs = getSalesCogs(monthlySales, products);
+  const monthlyProfit = monthlyRevenue - monthlyCogs;
+
+  // Sales Trend Data (Last 30 business days)
   const last30Days = Array.from({ length: 30 }, (_, i) => {
-    const d = new Date();
+    const d = new Date(currentBusinessDay);
     d.setDate(d.getDate() - (29 - i));
-    d.setHours(0, 0, 0, 0);
     return d;
   });
 
   const salesTrendData = last30Days.map(date => {
     const daySales = sales.filter(s => {
       const sDate = toDisplayDate(s.saleDate, s.saleDateClient);
-      if (!sDate) return false;
-      sDate.setHours(0, 0, 0, 0);
-      return sDate.getTime() === date.getTime();
+      return sDate && getBusinessDay(sDate).getTime() === date.getTime();
     });
     return {
       date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -154,9 +201,36 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
-        
+
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1 shadow-sm">
+            <Calendar size={14} className="text-slate-400" />
+            <input 
+              type="date" 
+              value={startDateStr}
+              onChange={(e) => setStartDateStr(e.target.value)}
+              className="bg-transparent text-xs font-bold text-slate-600 focus:outline-none"
+            />
+            <span className="text-slate-300">-</span>
+            <input 
+              type="date" 
+              value={endDateStr}
+              onChange={(e) => setEndDateStr(e.target.value)}
+              className="bg-transparent text-xs font-bold text-slate-600 focus:outline-none"
+            />
+          </div>
+          {(startDateStr || endDateStr) && (
+            <button 
+              onClick={() => { setStartDateStr(''); setEndDateStr(''); }}
+              className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-rose-500 transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
         {products.length === 0 && (
-          <button 
+          <button
             onClick={handleSeedData}
             disabled={seeding}
             className="flex items-center gap-2 px-6 py-3 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-fuchsia-600/20 uppercase tracking-widest text-xs"
@@ -207,29 +281,57 @@ const Dashboard: React.FC = () => {
           <span className="text-slate-400 text-sm ml-auto">Real-time business metrics at a glance</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricCard 
-            title="MONTHLY REVENUE" 
-            value={formatCurrency(monthlyRevenue)} 
-            icon={<TrendingUp size={24} className="text-white" />} 
+          <MetricCard
+            title={`${cardPrefix} PROFIT`}
+            value={formatCurrency(periodProfit)}
+            icon={<TrendingUp size={24} className="text-white" />}
+            colorClass="metric-card-orange shadow-orange-500/20"
+          />
+          <MetricCard
+            title={`${cardPrefix} REVENUE`}
+            value={formatCurrency(periodRevenue)}
+            icon={<DollarSign size={24} className="text-white" />}
             colorClass="metric-card-violet shadow-violet-500/20"
           />
-          <MetricCard 
-            title="TODAY'S SALES" 
-            value={todaySales.length} 
-            icon={<ShoppingCart size={24} className="text-white" />} 
-            colorClass="metric-card-cyan shadow-cyan-500/20"
-          />
-          <MetricCard 
-            title="TODAY'S REVENUE" 
-            value={formatCurrency(todayRevenue)} 
-            icon={<DollarSign size={24} className="text-white" />} 
+          <MetricCard
+            title={`${cardPrefix} CASH`}
+            value={formatCurrency(periodCash)}
+            icon={<Banknote size={24} className="text-white" />}
             colorClass="metric-card-emerald shadow-emerald-500/20"
           />
-          <MetricCard 
-            title="TOTAL PRODUCTS" 
-            value={products.length} 
-            icon={<Package size={24} className="text-white" />} 
-            colorClass="metric-card-orange shadow-orange-500/20"
+          <MetricCard
+            title={`${cardPrefix} ONLINE/CREDIT`}
+            value={formatCurrency(periodOnline)}
+            icon={<RefreshCw size={24} className="text-white" />}
+            colorClass="metric-card-cyan shadow-cyan-500/20"
+          />
+        </div>
+
+        {/* Row 2 Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-2">
+          <MetricCard
+            title={`${cardPrefix} EXPENSE`}
+            value={formatCurrency(periodExpense)}
+            icon={<TrendingDown size={24} className="text-white" />}
+            colorClass="metric-card-red shadow-rose-500/20"
+          />
+          <MetricCard
+            title="WEEKLY PROFIT"
+            value={formatCurrency(weeklyProfit)}
+            icon={<TrendingUp size={24} className="text-white" />}
+            colorClass="metric-card-pink shadow-fuchsia-500/20"
+          />
+          <MetricCard
+            title="MONTHLY PROFIT"
+            value={formatCurrency(monthlyProfit)}
+            icon={<TrendingUp size={24} className="text-white" />}
+            colorClass="metric-card-violet shadow-violet-500/20"
+          />
+          <MetricCard
+            title="MONTHLY REVENUE"
+            value={formatCurrency(monthlyRevenue)}
+            icon={<DollarSign size={24} className="text-white" />}
+            colorClass="metric-card-cyan shadow-cyan-500/20"
           />
         </div>
       </div>
@@ -258,41 +360,41 @@ const Dashboard: React.FC = () => {
               <AreaChart data={salesTrendData}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis 
-                  dataKey="date" 
-                  stroke="#94a3b8" 
-                  fontSize={10} 
-                  tickLine={false} 
+                <XAxis
+                  dataKey="date"
+                  stroke="#94a3b8"
+                  fontSize={10}
+                  tickLine={false}
                   axisLine={false}
                   dy={10}
                 />
-                <YAxis 
-                  stroke="#94a3b8" 
-                  fontSize={10} 
-                  tickLine={false} 
+                <YAxis
+                  stroke="#94a3b8"
+                  fontSize={10}
+                  tickLine={false}
                   axisLine={false}
-                  tickFormatter={(value) => `${value/1000}k`}
+                  tickFormatter={(value) => `${value / 1000}k`}
                 />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Area 
-                  type="monotone" 
-                  dataKey="revenue" 
-                  stroke="#3b82f6" 
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#3b82f6"
                   strokeWidth={3}
-                  fillOpacity={1} 
-                  fill="url(#colorRevenue)" 
+                  fillOpacity={1}
+                  fill="url(#colorRevenue)"
                 />
-                <Area 
-                  type="monotone" 
-                  dataKey="transactions" 
-                  stroke="#e879f9" 
+                <Area
+                  type="monotone"
+                  dataKey="transactions"
+                  stroke="#e879f9"
                   strokeWidth={3}
                   fill="none"
                 />
@@ -310,15 +412,15 @@ const Dashboard: React.FC = () => {
               <BarChart data={categoryData} layout="vertical" margin={{ left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
                 <XAxis type="number" hide />
-                <YAxis 
-                  dataKey="name" 
-                  type="category" 
-                  stroke="#94a3b8" 
-                  fontSize={10} 
-                  tickLine={false} 
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  stroke="#94a3b8"
+                  fontSize={10}
+                  tickLine={false}
                   axisLine={false}
                 />
-                <Tooltip 
+                <Tooltip
                   cursor={{ fill: '#f8fafc' }}
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px' }}
                 />

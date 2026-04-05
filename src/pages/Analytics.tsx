@@ -31,7 +31,7 @@ import {
 import { useFirestore } from '../hooks/useFirestore';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
-import { startOfMonth, endOfMonth, subMonths, format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { startOfMonth, endOfMonth, subMonths, subDays, format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { where } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { getSalesCogs } from '../lib/finance';
@@ -45,6 +45,8 @@ const Analytics: React.FC = () => {
   const { documents: products, loading: productsLoading } = useFirestore<any>(shopId ? 'products' : null, where('shopId', '==', shopId));
 
   const [timeRange, setTimeRange] = useState('thisMonth');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
 
   const stats = useMemo(() => {
     if (salesLoading || expensesLoading) return null;
@@ -57,6 +59,10 @@ const Analytics: React.FC = () => {
       case 'today':
         startDate = startOfDay(now);
         break;
+      case 'yesterday':
+        startDate = startOfDay(subDays(now, 1));
+        endDate = endOfDay(subDays(now, 1));
+        break;
       case 'thisMonth':
         startDate = startOfMonth(now);
         break;
@@ -66,6 +72,10 @@ const Analytics: React.FC = () => {
         break;
       case 'last3Months':
         startDate = startOfMonth(subMonths(now, 3));
+        break;
+      case 'custom':
+        startDate = customStart ? startOfDay(new Date(customStart)) : startOfMonth(now);
+        endDate = customEnd ? endOfDay(new Date(customEnd)) : endOfDay(now);
         break;
       default:
         startDate = startOfMonth(now);
@@ -139,14 +149,14 @@ const Analytics: React.FC = () => {
             <p className="text-slate-500 text-sm">Deep dive into your shop's performance and financial health</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-center gap-3">
           <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
-            {['today', 'thisMonth', 'lastMonth', 'last3Months'].map((range) => (
+            {['today', 'yesterday', 'thisMonth', 'lastMonth', 'custom'].map((range) => (
               <button
                 key={range}
-                onClick={() => setTimeRange(range)}
+                onClick={() => { setTimeRange(range); }}
                 className={cn(
-                  "px-4 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
+                  "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
                   timeRange === range 
                     ? "bg-violet-600 text-white shadow-md" 
                     : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
@@ -156,6 +166,24 @@ const Analytics: React.FC = () => {
               </button>
             ))}
           </div>
+          {timeRange === 'custom' && (
+            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
+              <Calendar size={14} className="text-slate-400" />
+              <input 
+                type="date" 
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-600 focus:outline-none"
+              />
+              <span className="text-slate-300">-</span>
+              <input 
+                type="date" 
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-600 focus:outline-none"
+              />
+            </div>
+          )}
         </div>
       </header>
 

@@ -3,7 +3,7 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  
+
   --color-sidebar: #15152b;
   --color-content-bg: #f3f4f9;
   --color-card-bg: #ffffff;
@@ -25,12 +25,29 @@
   @apply bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-600/20;
 }
 
-.metric-card-violet { @apply bg-gradient-to-br from-violet-500 to-violet-700 text-white; }
-.metric-card-pink { @apply bg-gradient-to-br from-fuchsia-400 to-fuchsia-600 text-white; }
-.metric-card-cyan { @apply bg-gradient-to-br from-cyan-400 to-cyan-600 text-white; }
-.metric-card-red { @apply bg-gradient-to-br from-rose-400 to-rose-600 text-white; }
-.metric-card-orange { @apply bg-gradient-to-br from-orange-400 to-orange-600 text-white; }
-.metric-card-emerald { @apply bg-gradient-to-br from-emerald-400 to-emerald-600 text-white; }
+.metric-card-violet {
+  @apply bg-gradient-to-br from-violet-500 to-violet-700 text-white;
+}
+
+.metric-card-pink {
+  @apply bg-gradient-to-br from-fuchsia-400 to-fuchsia-600 text-white;
+}
+
+.metric-card-cyan {
+  @apply bg-gradient-to-br from-cyan-400 to-cyan-600 text-white;
+}
+
+.metric-card-red {
+  @apply bg-gradient-to-br from-rose-400 to-rose-600 text-white;
+}
+
+.metric-card-orange {
+  @apply bg-gradient-to-br from-orange-400 to-orange-600 text-white;
+}
+
+.metric-card-emerald {
+  @apply bg-gradient-to-br from-emerald-400 to-emerald-600 text-white;
+}
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
