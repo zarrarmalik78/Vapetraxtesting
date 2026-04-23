@@ -166,6 +166,144 @@ const Sales: React.FC = () => {
     }
   };
 
+  const handleRemoveItemFromSale = async (sale: any, itemIndex: number) => {
+    if (!shopId) return;
+    if (sale.items.length <= 1) {
+      // Removing the only item deletes the sale entirely
+      if (window.confirm('This is the last item in the sale. Removing it will delete the entire sale. Continue?')) {
+        try {
+          await deleteSaleWithReversal(sale);
+          toast.success('Sale deleted and inventory restored');
+          if (showInvoiceModal?.id === sale.id) {
+            setShowInvoiceModal(null);
+          }
+        } catch (error) {
+          console.error(error);
+          toast.error('Failed to delete sale');
+        }
+      }
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to remove this item? Inventory and totals will be updated.')) return;
+
+    try {
+      const batch = writeBatch(db);
+      const item = sale.items[itemIndex];
+
+      const productRef = doc(db, 'products', item.productId);
+      const productSnap = await getDoc(productRef);
+
+      const isELiquidLine = item.saleType === 'refill' || item.saleType === 'full_bottle';
+      if (isELiquidLine) {
+        const bottleSizeMl = parseBottleSizeMl(item.bottleSize, 30);
+        const mlToRestore =
+          item.saleType === 'refill'
+            ? (Number(item.refillAmount) || 0) * (Number(item.quantity) || 0)
+            : bottleSizeMl * (Number(item.quantity) || 0);
+
+        if (mlToRestore > 0 && productSnap.exists()) {
+          batch.update(productRef, { stockQuantity: increment(mlToRestore) });
+        }
+
+        const bottleChanges: any[] = Array.isArray(item.bottleChanges) ? item.bottleChanges : [];
+        for (const bc of bottleChanges) {
+          if (!bc?.bottleId) continue;
+          const bottleRef = doc(db, `products/${item.productId}/bottles`, bc.bottleId);
+          const bottleSnap = await getDoc(bottleRef);
+          if (bottleSnap.exists()) {
+            batch.update(bottleRef, {
+              remainingMl: Number(bc.beforeRemainingMl) || 0,
+              status: bc.beforeStatus || 'closed',
+              openedDate: bc.beforeOpenedDate || null,
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
+
+        const logRef = doc(collection(db, 'inventoryLogs'));
+        batch.set(logRef, {
+          productId: item.productId,
+          productName: item.productName || 'Unknown Product',
+          shopId,
+          action: 'return',
+          type: 'return',
+          mlChange: mlToRestore,
+          change: mlToRestore,
+          quantityChange: item.saleType === 'full_bottle' ? Number(item.quantity) || 0 : 0,
+          reason: `Item removed from sale: ${(sale.id ? sale.id.slice(-6).toUpperCase() : '') || sale.id}`,
+          notes: productSnap.exists() ? `Inventory restored` : `Product was missing`,
+          ...actorMeta,
+          createdAt: serverTimestamp(),
+          createdAtClient: new Date()
+        });
+      } else {
+        if (productSnap.exists()) {
+          batch.update(productRef, { stockQuantity: increment(item.quantity) });
+        }
+
+        const logRef = doc(collection(db, 'inventoryLogs'));
+        batch.set(logRef, {
+          productId: item.productId,
+          productName: item.productName || 'Unknown Product',
+          shopId,
+          action: 'return',
+          type: 'return',
+          change: Number(item.quantity) || 0,
+          quantityChange: item.quantity,
+          reason: `Item removed from sale: ${(sale.id ? sale.id.slice(-6).toUpperCase() : '') || sale.id}`,
+          notes: productSnap.exists() ? `Inventory restored` : `Product was missing`,
+          ...actorMeta,
+          createdAt: serverTimestamp(),
+          createdAtClient: new Date()
+        });
+      }
+
+      // Reverse credit if applicable
+      if (sale.paymentMethod === 'credit' && sale.customerId) {
+        const customerRef = doc(db, 'customers', sale.customerId);
+        const customerSnap = await getDoc(customerRef);
+        if (customerSnap.exists()) {
+          batch.update(customerRef, { creditBalance: increment(-item.totalPrice) });
+        }
+      }
+
+      // Modify the sale document
+      const newItems = [...sale.items];
+      newItems.splice(itemIndex, 1);
+      
+      const newTotalAmount = sale.totalAmount - (item.totalPrice || 0);
+      const newTotalCOGS = sale.totalCOGS - (item.totalCost || 0);
+      const newTotalProfit = sale.totalProfit - (item.profit || 0);
+
+      const saleRef = doc(db, 'sales', sale.id);
+      batch.update(saleRef, {
+        items: newItems,
+        totalAmount: newTotalAmount,
+        totalCOGS: newTotalCOGS,
+        totalProfit: newTotalProfit,
+        updatedAt: serverTimestamp()
+      });
+
+      await batch.commit();
+
+      if (showInvoiceModal?.id === sale.id) {
+        setShowInvoiceModal({
+          ...sale,
+          items: newItems,
+          totalAmount: newTotalAmount,
+          totalCOGS: newTotalCOGS,
+          totalProfit: newTotalProfit
+        });
+      }
+
+      toast.success('Item removed and inventory restored');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to remove item');
+    }
+  };
+
   const toggleSelectAll = (checked: boolean) => {
     setSelectedIds(checked ? filteredSales.map((s) => s.id) : []);
   };
@@ -419,6 +557,7 @@ const Sales: React.FC = () => {
           sale={showInvoiceModal} 
           customer={customers.find(c => c.id === showInvoiceModal.customerId)}
           onClose={() => setShowInvoiceModal(null)} 
+          onRemoveItem={userRole === 'admin' ? (idx) => handleRemoveItemFromSale(showInvoiceModal, idx) : undefined}
         />
       )}
       <ConfirmBulkDeleteModal
@@ -443,7 +582,7 @@ const Sales: React.FC = () => {
   );
 };
 
-const InvoiceModal: React.FC<{ sale: any, customer: any, onClose: () => void }> = ({ sale, customer, onClose }) => {
+const InvoiceModal: React.FC<{ sale: any, customer: any, onClose: () => void, onRemoveItem?: (idx: number) => void }> = ({ sale, customer, onClose, onRemoveItem }) => {
   const { shopId } = useAuth();
   const { document: settings } = useDocument<any>(shopId ? 'settings' : null, shopId ? (shopId || 'shop_settings') : null);
 
@@ -507,11 +646,12 @@ const InvoiceModal: React.FC<{ sale: any, customer: any, onClose: () => void }> 
                 <th className="py-4 text-center">Qty/ML</th>
                 <th className="py-4 text-right">Price</th>
                 <th className="py-4 text-right">Total</th>
+                {onRemoveItem && <th className="py-4 text-right print:hidden">Action</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {sale.items?.map((item: any, idx: number) => (
-                <tr key={idx}>
+                <tr key={idx} className="group/row">
                   <td className="py-4">
                     <p className="font-bold text-gray-800">{item.productName}</p>
                     <p className="text-[10px] text-gray-400 uppercase font-bold">{item.saleType.replace('_', ' ')}</p>
@@ -521,6 +661,17 @@ const InvoiceModal: React.FC<{ sale: any, customer: any, onClose: () => void }> 
                   </td>
                   <td className="py-4 text-right text-gray-600">{formatCurrency(item.unitPrice)}</td>
                   <td className="py-4 text-right font-bold text-gray-800">{formatCurrency(item.totalPrice)}</td>
+                  {onRemoveItem && (
+                    <td className="py-4 text-right print:hidden">
+                      <button
+                        onClick={() => onRemoveItem(idx)}
+                        className="p-1.5 text-gray-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover/row:opacity-100 focus:opacity-100"
+                        title="Remove item & restore stock"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

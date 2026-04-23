@@ -1,12 +1,12 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  Search, 
-  ShoppingCart, 
-  Trash2, 
-  Plus, 
-  Minus, 
-  CreditCard, 
-  Banknote, 
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  Search,
+  ShoppingCart,
+  Trash2,
+  Plus,
+  Minus,
+  CreditCard,
+  Banknote,
   RefreshCw,
   X,
   Droplet,
@@ -17,15 +17,15 @@ import {
 import { useFirestore } from '../hooks/useFirestore';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
-import { 
-  collection, 
-  addDoc, 
-  serverTimestamp, 
-  doc, 
-  getDocs, 
-  query, 
-  where, 
-  orderBy, 
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  doc,
+  getDocs,
+  query,
+  where,
+  orderBy,
   limit,
   increment,
   writeBatch
@@ -57,11 +57,22 @@ const NewSale: React.FC = () => {
     shopId ? 'customers' : null,
     where('shopId', '==', shopId)
   );
-  
+
   const [searchTerm, setSearchTerm] = useState('');
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('vapetrax_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | 'credit' | 'return'>('cash');
+
+  useEffect(() => {
+    localStorage.setItem('vapetrax_cart', JSON.stringify(cart));
+  }, [cart]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showRefillModal, setShowRefillModal] = useState<{ product: any } | null>(null);
   const [refillAmount, setRefillAmount] = useState<number>(3.0);
@@ -73,8 +84,8 @@ const NewSale: React.FC = () => {
   const displayProducts = useMemo(() => {
     let filtered = products;
     if (searchTerm) {
-      filtered = products.filter(p => 
-        p.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      filtered = products.filter(p =>
+        p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.category?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -146,7 +157,7 @@ const NewSale: React.FC = () => {
       }
     }
 
-    const existingItemIndex = cart.findIndex(item => 
+    const existingItemIndex = cart.findIndex(item =>
       item.productId === product.id && item.saleType === type && item.refillAmount === amount
     );
 
@@ -255,10 +266,10 @@ const NewSale: React.FC = () => {
 
     try {
       const saleItems = [];
-      
+
       for (const item of cart) {
         const productRef = doc(db, 'products', item.productId);
-        
+
         if (item.saleType === 'refill') {
           const mlNeeded = (item.refillAmount || 0) * item.quantity;
           if (mlNeeded <= 0) {
@@ -374,7 +385,7 @@ const NewSale: React.FC = () => {
             limit(item.quantity)
           );
           const closedSnapshot = await getDocs(closedBottlesQuery);
-          
+
           if (closedSnapshot.docs.length < item.quantity) {
             throw new Error(`Not enough full bottles for ${item.productName}`);
           }
@@ -536,8 +547,8 @@ const NewSale: React.FC = () => {
         {/* Search Bar */}
         <div className="relative shrink-0">
           <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={24} />
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Search by name or category..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -550,14 +561,14 @@ const NewSale: React.FC = () => {
           {displayProducts.map((product) => {
             const isOutOfStock = product.stockQuantity <= 0;
             const isELiquid = product.category === 'e-liquid';
-            
+
             return (
-              <div 
-                key={product.id} 
+              <div
+                key={product.id}
                 className={cn(
                   "bg-white border rounded-[24px] p-6 transition-all hover:shadow-lg group relative flex flex-col",
-                  isOutOfStock 
-                    ? "border-slate-200 opacity-60" 
+                  isOutOfStock
+                    ? "border-slate-200 opacity-60"
                     : "border-slate-200 hover:border-violet-300"
                 )}
               >
@@ -566,9 +577,9 @@ const NewSale: React.FC = () => {
                   <div className={cn(
                     "w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm",
                     isOutOfStock ? "bg-slate-100 text-slate-400" :
-                    product.category === 'device' ? "bg-blue-100 text-blue-600" :
-                    product.category === 'coil' ? "bg-emerald-100 text-emerald-600" :
-                    "bg-violet-100 text-violet-600"
+                      product.category === 'device' ? "bg-blue-100 text-blue-600" :
+                        product.category === 'coil' ? "bg-emerald-100 text-emerald-600" :
+                          "bg-violet-100 text-violet-600"
                   )}>
                     {isELiquid ? <Droplet size={24} /> : <Package size={24} />}
                   </div>
@@ -578,11 +589,11 @@ const NewSale: React.FC = () => {
                   )}>
                     {isELiquid
                       ? (() => {
-                          const bSize = parseBottleSizeMl(product.bottleSize, 30);
-                          const bottles = Math.floor((product.stockQuantity || 0) / bSize);
-                          const ml = Math.round((product.stockQuantity || 0) % bSize);
-                          return `${bottles} bottle ${ml}ml left`;
-                        })()
+                        const bSize = parseBottleSizeMl(product.bottleSize, 30);
+                        const bottles = Math.floor((product.stockQuantity || 0) / bSize);
+                        const ml = Math.round((product.stockQuantity || 0) % bSize);
+                        return `${bottles} bottle ${ml}ml left`;
+                      })()
                       : `${product.stockQuantity} Left`}
                   </span>
                 </div>
@@ -601,10 +612,10 @@ const NewSale: React.FC = () => {
                   )}>
                     {formatCurrency(product.sellingPrice)}
                   </p>
-                  
+
                   {isELiquid ? (
                     <div className="flex gap-2">
-                      <button 
+                      <button
                         onClick={async () => {
                           setRefillModalBottles(null);
                           setRefillAmount(3);
@@ -639,7 +650,7 @@ const NewSale: React.FC = () => {
                       >
                         <Droplets size={22} />
                       </button>
-                      <button 
+                      <button
                         onClick={() => addToCart(product, 'full_bottle')}
                         disabled={isOutOfStock}
                         className="w-12 h-12 flex items-center justify-center bg-slate-50 text-slate-600 hover:bg-violet-600 hover:text-white rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-md active:scale-95"
@@ -649,7 +660,7 @@ const NewSale: React.FC = () => {
                       </button>
                     </div>
                   ) : (
-                    <button 
+                    <button
                       onClick={() => addToCart(product, 'regular')}
                       disabled={isOutOfStock}
                       className="w-12 h-12 flex items-center justify-center bg-slate-50 text-slate-600 hover:bg-violet-600 hover:text-white hover:shadow-md rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
@@ -701,16 +712,16 @@ const NewSale: React.FC = () => {
                     {item.saleType.replace('_', ' ')} {item.refillAmount ? `• ${item.refillAmount}ml` : ''}
                   </p>
                 </div>
-                
+
                 <div className="flex items-center gap-2 bg-slate-50 rounded-xl p-1 border border-slate-100">
-                  <button 
+                  <button
                     onClick={() => updateQuantity(index, -1)}
                     className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg text-slate-600 transition-all hover:shadow-sm"
                   >
                     <Minus size={14} />
                   </button>
                   <span className="text-base font-bold text-slate-900 min-w-[24px] text-center">{item.quantity}</span>
-                  <button 
+                  <button
                     onClick={() => updateQuantity(index, 1)}
                     className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg text-slate-600 transition-all hover:shadow-sm"
                   >
@@ -729,7 +740,7 @@ const NewSale: React.FC = () => {
                     aria-label="Unit sale price"
                   />
                   <p className="text-base font-bold text-violet-600">{formatCurrency(item.unitPrice * item.quantity)}</p>
-                  <button 
+                  <button
                     onClick={() => removeFromCart(index)}
                     className="text-slate-300 hover:text-rose-500 transition-colors p-1"
                   >
@@ -753,7 +764,7 @@ const NewSale: React.FC = () => {
         <div className="shrink-0 sticky bottom-0 p-4 border-t border-slate-100 space-y-4 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 z-10">
           {/* Customer & Payment (compact) */}
           <div className="grid grid-cols-2 gap-4">
-            <select 
+            <select
               value={selectedCustomerId || ''}
               onChange={(e) => setSelectedCustomerId(e.target.value || null)}
               className="bg-white border border-slate-200 rounded-2xl px-4 py-3.5 text-sm text-slate-700 font-bold focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-300 transition-all shadow-sm"
@@ -763,7 +774,7 @@ const NewSale: React.FC = () => {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            <select 
+            <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value as any)}
               className="bg-white border border-slate-200 rounded-2xl px-4 py-3.5 text-sm text-slate-700 font-bold focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-300 transition-all shadow-sm"
@@ -792,7 +803,7 @@ const NewSale: React.FC = () => {
           </div>
 
           {/* Generate Bill Button */}
-          <button 
+          <button
             onClick={handleCompleteSale}
             disabled={isProcessing || cart.length === 0}
             className="w-full h-16 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-[20px] shadow-[0_8px_20px_-6px_rgba(139,92,246,0.5)] hover:shadow-[0_12px_24px_-8px_rgba(139,92,246,0.6)] focus:ring-4 focus:ring-violet-500/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-3 text-lg"
@@ -862,8 +873,8 @@ const NewSale: React.FC = () => {
                       onClick={() => setRefillAmount(val)}
                       className={cn(
                         "py-5 rounded-[20px] border-2 text-xl font-black transition-all focus:outline-none focus:border-violet-400",
-                        refillAmount === val 
-                          ? "bg-violet-600 border-violet-600 text-white shadow-lg shadow-violet-600/30 scale-105" 
+                        refillAmount === val
+                          ? "bg-violet-600 border-violet-600 text-white shadow-lg shadow-violet-600/30 scale-105"
                           : "bg-white border-slate-100 text-slate-500 hover:border-violet-200 hover:bg-violet-50 active:scale-95"
                       )}
                     >
@@ -891,7 +902,7 @@ const NewSale: React.FC = () => {
                 </span>
               </div>
 
-              <button 
+              <button
                 onClick={() => {
                   addToCart(showRefillModal.product, 'refill', refillAmount);
                   setShowRefillModal(null);

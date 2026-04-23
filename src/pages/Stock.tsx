@@ -926,6 +926,9 @@ const ProductModal: React.FC<{ product?: any, onClose: () => void }> = ({ produc
     pricePerMl: isEditing ? (product?.pricePerMl || 0) : 100
   });
   const [addBottleCount, setAddBottleCount] = useState<number | string>('');
+  const [addMlCount, setAddMlCount] = useState<number | string>('');
+  const [removeMlCount, setRemoveMlCount] = useState<number | string>('');
+  const [addStockCount, setAddStockCount] = useState<number | string>('');
   const [removeStockCount, setRemoveStockCount] = useState<number | string>('');
   const [saving, setSaving] = useState(false);
 
@@ -938,6 +941,7 @@ const ProductModal: React.FC<{ product?: any, onClose: () => void }> = ({ produc
     const sellingPrice = Number(formData.sellingPrice) || 0;
     const stockQuantity = Number(formData.stockQuantity) || 0;
     const pricePerMl = Number(formData.pricePerMl) || 0;
+    const addStock = Math.max(0, Math.floor(Number(addStockCount) || 0));
 
     if (!formData.name.trim()) {
       toast.error('Product name is required');
@@ -962,24 +966,28 @@ const ProductModal: React.FC<{ product?: any, onClose: () => void }> = ({ produc
         const isELiquid = formData.category === 'e-liquid';
         const bottleSizeMl = parseBottleSizeMl(formData.bottleSize, 30);
         const bottlesToAdd = isELiquid ? Math.max(0, Math.floor(Number(addBottleCount) || 0)) : 0;
-        const mlToAdd = bottlesToAdd > 0 ? bottleSizeMl * bottlesToAdd : 0;
-        const removeCount = Math.max(0, Math.floor(Number(removeStockCount) || 0));
+        const mlFromBottles = bottlesToAdd > 0 ? bottleSizeMl * bottlesToAdd : 0;
+        const rawMlToAdd = isELiquid ? Math.max(0, Number(addMlCount) || 0) : 0;
+        const rawMlToRemove = isELiquid ? Math.max(0, Number(removeMlCount) || 0) : 0;
+        const removeCount = !isELiquid ? Math.max(0, Math.floor(Number(removeStockCount) || 0)) : 0;
+        const totalMlToAdd = mlFromBottles + rawMlToAdd;
 
         // --- Manual Stock Deduction validation ---
-        if (removeCount > 0) {
-          if (isELiquid) {
-            const mlToRemove = removeCount * bottleSizeMl;
-            if (mlToRemove > (Number(product.stockQuantity) || 0)) {
-              toast.error(`Cannot remove ${removeCount} bottle(s). Only ${Math.floor((Number(product.stockQuantity) || 0) / bottleSizeMl)} available.`);
-              setSaving(false);
-              return;
-            }
-          } else {
-            if (removeCount > stockQuantity) {
-              toast.error(`Cannot remove ${removeCount} units. Only ${stockQuantity} in stock.`);
-              setSaving(false);
-              return;
-            }
+        const currentStockQty = Number(product.stockQuantity) || 0;
+        if (isELiquid && rawMlToRemove > 0) {
+          const effectiveStock = currentStockQty + totalMlToAdd;
+          if (rawMlToRemove > effectiveStock) {
+            toast.error(`Cannot remove ${rawMlToRemove}ml. Only ${effectiveStock}ml available.`);
+            setSaving(false);
+            return;
+          }
+        }
+        if (!isELiquid && removeCount > 0) {
+          const effectiveStock = currentStockQty + addStock;
+          if (removeCount > effectiveStock) {
+            toast.error(`Cannot remove ${removeCount} units. Only ${effectiveStock} in stock.`);
+            setSaving(false);
+            return;
           }
         }
 
@@ -987,26 +995,24 @@ const ProductModal: React.FC<{ product?: any, onClose: () => void }> = ({ produc
         let finalCostPrice = costPrice;
         let finalUnitCostPerMl = costPrice / (bottleSizeMl || 1);
 
-        if (isELiquid && mlToAdd > 0) {
+        if (isELiquid && totalMlToAdd > 0) {
           // E-Liquid: weighted average in per-ml terms
-          const currentMl = Number(product.stockQuantity) || 0;
+          const currentMl = currentStockQty;
           const currentCostPerMl = Number(product.unitCostPerMl) || (Number(product.costPrice) / (parseBottleSizeMl(product.bottleSize, 30) || 1));
           const newCostPerMl = Number(costPrice) / (bottleSizeMl || 1);
-          const totalMl = currentMl + mlToAdd;
+          const totalMl = currentMl + totalMlToAdd;
           finalUnitCostPerMl = totalMl > 0
-            ? ((currentMl * currentCostPerMl) + (mlToAdd * newCostPerMl)) / totalMl
+            ? ((currentMl * currentCostPerMl) + (totalMlToAdd * newCostPerMl)) / totalMl
             : newCostPerMl;
           finalCostPrice = Math.round(finalUnitCostPerMl * bottleSizeMl * 100) / 100;
           finalUnitCostPerMl = Math.round(finalUnitCostPerMl * 100) / 100;
-        } else if (!isELiquid) {
-          // Regular product: weighted average cost if stock increased
-          const currentStock = Number(product.stockQuantity) || 0;
+        } else if (!isELiquid && addStock > 0) {
+          // Regular product: weighted average cost when adding stock
           const currentCost = Number(product.costPrice) || 0;
-          const addedStock = stockQuantity - currentStock;
-          if (addedStock > 0 && costPrice !== currentCost) {
-            const totalStock = currentStock + addedStock;
+          if (costPrice !== currentCost) {
+            const totalStock = currentStockQty + addStock;
             finalCostPrice = totalStock > 0
-              ? Math.round(((currentStock * currentCost) + (addedStock * costPrice)) / totalStock * 100) / 100
+              ? Math.round(((currentStockQty * currentCost) + (addStock * costPrice)) / totalStock * 100) / 100
               : costPrice;
           }
         }
@@ -1026,28 +1032,22 @@ const ProductModal: React.FC<{ product?: any, onClose: () => void }> = ({ produc
         if (isELiquid) {
           updatePayload.unitCostPerMl = finalUnitCostPerMl;
           updatePayload.pricePerMl = pricePerMl;
-          if (mlToAdd > 0) {
-            updatePayload.stockQuantity = increment(mlToAdd);
-          } else {
-            updatePayload.stockQuantity = stockQuantity;
+          // Net ML change = bottles added + raw ML added - raw ML removed
+          const netMlChange = totalMlToAdd - rawMlToRemove;
+          if (netMlChange !== 0) {
+            updatePayload.stockQuantity = increment(netMlChange);
           }
         } else {
-          updatePayload.stockQuantity = stockQuantity;
-        }
-
-        // Handle stock removal
-        if (removeCount > 0) {
-          if (isELiquid) {
-            const mlToRemove = removeCount * bottleSizeMl;
-            updatePayload.stockQuantity = increment(-mlToRemove);
-          } else {
-            updatePayload.stockQuantity = stockQuantity - removeCount;
+          // Device/coil: additive stock logic
+          const netChange = addStock - removeCount;
+          if (netChange !== 0) {
+            updatePayload.stockQuantity = increment(netChange);
           }
         }
 
         await updateDoc(productRef, updatePayload);
 
-        // --- E-Liquid: handle bottle additions ---
+        // --- E-Liquid: handle bottle sub-doc additions (whole bottles) ---
         if (isELiquid && bottlesToAdd > 0) {
           for (let i = 0; i < bottlesToAdd; i++) {
             await addDoc(collection(db, `products/${product.id}/bottles`), {
@@ -1059,66 +1059,157 @@ const ProductModal: React.FC<{ product?: any, onClose: () => void }> = ({ produc
               updatedAt: serverTimestamp()
             });
           }
-          await addDoc(collection(db, 'inventoryLogs'), {
-            productId: product.id,
-            productName: formData.name,
-            shopId,
-            action: 'addition',
-            type: 'addition',
-            mlChange: mlToAdd,
-            change: mlToAdd,
-            quantityChange: bottlesToAdd,
-            newStockMl: (Number(product?.stockQuantity) || 0) + mlToAdd,
-            newStock: (Number(product?.stockQuantity) || 0) + mlToAdd,
-            reason: 'Stock addition',
-            notes: `Added ${bottlesToAdd} bottle(s)`,
-            ...actorMeta,
-            createdAt: serverTimestamp(),
-            createdAtClient: new Date()
-          });
         }
 
-        // --- E-Liquid: handle bottle removals ---
-        if (isELiquid && removeCount > 0) {
-          const mlToRemove = removeCount * bottleSizeMl;
-          // Find closed bottles to delete (LIFO - most recent first)
-          const closedQuery = query(
+        // --- E-Liquid: handle raw ML additions into bottle sub-docs ---
+        if (isELiquid && rawMlToAdd > 0) {
+          // Fetch all current bottles to find ones we can fill
+          const allBottlesQuery = query(
             collection(db, `products/${product.id}/bottles`),
             where('shopId', '==', shopId),
-            where('status', '==', 'closed'),
-            orderBy('createdAt', 'desc')
+            orderBy('createdAt', 'asc')
           );
-          const closedSnap = await getDocs(closedQuery);
-          const toDelete = closedSnap.docs.slice(0, removeCount);
-          for (const bottleDoc of toDelete) {
-            await deleteDoc(bottleDoc.ref);
+          const allBottlesSnap = await getDocs(allBottlesQuery);
+
+          let mlLeft = rawMlToAdd;
+
+          // Step 1: Fill opened bottles first (ones with remaining capacity)
+          const openedBottles = allBottlesSnap.docs
+            .filter(d => {
+              const data = d.data();
+              return data.status === 'opened' && (Number(data.remainingMl) || 0) < (Number(data.bottleSize) || bottleSizeMl);
+            })
+            .sort((a, b) => {
+              // Fill the one closest to full first (least capacity remaining)
+              const aSpace = (Number(a.data().bottleSize) || bottleSizeMl) - (Number(a.data().remainingMl) || 0);
+              const bSpace = (Number(b.data().bottleSize) || bottleSizeMl) - (Number(b.data().remainingMl) || 0);
+              return aSpace - bSpace;
+            });
+
+          for (const bottleDoc of openedBottles) {
+            if (mlLeft <= 0) break;
+            const data = bottleDoc.data();
+            const bSize = Number(data.bottleSize) || bottleSizeMl;
+            const curRemaining = Number(data.remainingMl) || 0;
+            const capacity = bSize - curRemaining;
+            if (capacity <= 0) continue;
+
+            const toAdd = Math.min(capacity, mlLeft);
+            const newRemaining = curRemaining + toAdd;
+            await updateDoc(bottleDoc.ref, {
+              remainingMl: newRemaining,
+              updatedAt: serverTimestamp()
+            });
+            mlLeft -= toAdd;
           }
-          await addDoc(collection(db, 'inventoryLogs'), {
-            productId: product.id,
-            productName: formData.name,
-            shopId,
-            action: 'deduction',
-            type: 'deduction',
-            mlChange: -mlToRemove,
-            change: -mlToRemove,
-            quantityChange: -removeCount,
-            newStockMl: Math.max(0, (Number(product?.stockQuantity) || 0) - mlToRemove),
-            newStock: Math.max(0, (Number(product?.stockQuantity) || 0) - mlToRemove),
-            reason: 'Manual stock deduction',
-            notes: `Removed ${removeCount} bottle(s)`,
-            ...actorMeta,
-            createdAt: serverTimestamp(),
-            createdAtClient: new Date()
-          });
+
+          // Step 2: Create new bottle sub-docs for any remaining ML
+          while (mlLeft > 0) {
+            const thisBottleMl = Math.min(mlLeft, bottleSizeMl);
+            const isFull = thisBottleMl >= bottleSizeMl;
+            await addDoc(collection(db, `products/${product.id}/bottles`), {
+              shopId,
+              bottleSize: bottleSizeMl,
+              remainingMl: thisBottleMl,
+              status: isFull ? 'closed' : 'opened',
+              ...(!isFull ? { openedDate: serverTimestamp() } : {}),
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+            mlLeft -= thisBottleMl;
+          }
+        }
+
+        // --- E-Liquid: handle raw ML removals from bottle sub-docs ---
+        if (isELiquid && rawMlToRemove > 0) {
+          const allBottlesQuery2 = query(
+            collection(db, `products/${product.id}/bottles`),
+            where('shopId', '==', shopId),
+            orderBy('createdAt', 'asc')
+          );
+          const allBottlesSnap2 = await getDocs(allBottlesQuery2);
+
+          let mlLeft = rawMlToRemove;
+
+          // Step 1: Drain from opened bottles first (least remaining first)
+          const openedForDrain = allBottlesSnap2.docs
+            .filter(d => d.data().status === 'opened' && (Number(d.data().remainingMl) || 0) > 0)
+            .sort((a, b) => (Number(a.data().remainingMl) || 0) - (Number(b.data().remainingMl) || 0));
+
+          for (const bottleDoc of openedForDrain) {
+            if (mlLeft <= 0) break;
+            const curRemaining = Number(bottleDoc.data().remainingMl) || 0;
+            const toRemove = Math.min(curRemaining, mlLeft);
+            const newRemaining = curRemaining - toRemove;
+            await updateDoc(bottleDoc.ref, {
+              remainingMl: newRemaining,
+              status: newRemaining <= 0 ? 'empty' : 'opened',
+              updatedAt: serverTimestamp()
+            });
+            mlLeft -= toRemove;
+          }
+
+          // Step 2: If still ML to remove, drain from closed bottles (newest first / LIFO)
+          if (mlLeft > 0) {
+            const closedForDrain = allBottlesSnap2.docs
+              .filter(d => d.data().status === 'closed' && (Number(d.data().remainingMl) || 0) > 0)
+              .sort((a, b) => {
+                const aMs = a.data().createdAt?.toMillis?.() || 0;
+                const bMs = b.data().createdAt?.toMillis?.() || 0;
+                return bMs - aMs; // newest first
+              });
+
+            for (const bottleDoc of closedForDrain) {
+              if (mlLeft <= 0) break;
+              const curRemaining = Number(bottleDoc.data().remainingMl) || 0;
+              const toRemove = Math.min(curRemaining, mlLeft);
+              const newRemaining = curRemaining - toRemove;
+              await updateDoc(bottleDoc.ref, {
+                remainingMl: newRemaining,
+                status: newRemaining <= 0 ? 'empty' : 'opened',
+                openedDate: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              });
+              mlLeft -= toRemove;
+            }
+          }
+        }
+
+        // --- E-Liquid: log all ML changes ---
+        if (isELiquid) {
+          const netMlChange = totalMlToAdd - rawMlToRemove;
+          if (netMlChange !== 0) {
+            const newStockMl = Math.max(0, currentStockQty + netMlChange);
+            const parts: string[] = [];
+            if (bottlesToAdd > 0) parts.push(`${bottlesToAdd} bottle(s) [${mlFromBottles}ml]`);
+            if (rawMlToAdd > 0) parts.push(`${rawMlToAdd}ml loose`);
+            if (rawMlToRemove > 0) parts.push(`removed ${rawMlToRemove}ml`);
+            await addDoc(collection(db, 'inventoryLogs'), {
+              productId: product.id,
+              productName: formData.name,
+              shopId,
+              action: netMlChange > 0 ? 'addition' : 'deduction',
+              type: netMlChange > 0 ? 'addition' : 'deduction',
+              mlChange: netMlChange,
+              change: netMlChange,
+              quantityChange: bottlesToAdd > 0 ? bottlesToAdd : 0,
+              newStockMl,
+              newStock: newStockMl,
+              reason: netMlChange > 0 ? 'Stock addition' : 'Manual stock deduction',
+              notes: parts.join(', ') || `${netMlChange > 0 ? 'Added' : 'Removed'} ${Math.abs(netMlChange)}ml`,
+              ...actorMeta,
+              createdAt: serverTimestamp(),
+              createdAtClient: new Date()
+            });
+          }
         }
 
         // --- Regular product: handle stock difference logging ---
         if (!isELiquid) {
-          const finalStock = removeCount > 0 ? stockQuantity - removeCount : stockQuantity;
-          const currentStock = Number(product.stockQuantity) || 0;
-          const netChange = finalStock - currentStock;
+          const netChange = addStock - removeCount;
           
           if (netChange !== 0) {
+            const newStock = Math.max(0, currentStockQty + netChange);
             await addDoc(collection(db, 'inventoryLogs'), {
               productId: product.id,
               productName: formData.name,
@@ -1127,7 +1218,7 @@ const ProductModal: React.FC<{ product?: any, onClose: () => void }> = ({ produc
               type: netChange > 0 ? 'addition' : 'deduction',
               change: netChange,
               quantityChange: netChange,
-              newStock: Math.max(0, finalStock),
+              newStock,
               reason: removeCount > 0 && netChange < 0 ? 'Manual stock deduction' : 'Stock adjustment',
               notes: netChange > 0 ? `Added ${netChange} unit(s)` : `Removed ${Math.abs(netChange)} unit(s)`,
               ...actorMeta,
@@ -1287,23 +1378,33 @@ const ProductModal: React.FC<{ product?: any, onClose: () => void }> = ({ produc
                   ? 'Available ML (read-only)'
                   : 'Initial Bottle Count'
                 : isEditing
-                  ? 'Current Stock'
+                  ? 'Current Stock (read-only)'
                   : 'Initial Stock'}
             </label>
-            <input 
-              required
-              type="number" 
-              value={formData.stockQuantity}
-              onChange={(e) => setFormData({...formData, stockQuantity: e.target.value === '' ? '' : (parseInt(e.target.value) || 0)})}
-              onFocus={handleNumericFocus}
-              placeholder="0"
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:ring-2 focus:ring-violet-500/20 outline-none transition-all"
-              disabled={isEditing && formData.category === 'e-liquid'}
-            />
+            {isEditing && formData.category !== 'e-liquid' ? (
+              <input 
+                type="number" 
+                value={formData.stockQuantity}
+                readOnly
+                className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-semibold cursor-not-allowed"
+              />
+            ) : (
+              <input 
+                required
+                type="number" 
+                value={formData.stockQuantity}
+                onChange={(e) => setFormData({...formData, stockQuantity: e.target.value === '' ? '' : (parseInt(e.target.value) || 0)})}
+                onFocus={handleNumericFocus}
+                placeholder="0"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:ring-2 focus:ring-violet-500/20 outline-none transition-all"
+                disabled={isEditing && formData.category === 'e-liquid'}
+              />
+            )}
 
-            {/* E-Liquid: Add / Remove Bottles */}
+            {/* E-Liquid: Add Bottles + Add/Remove ML */}
             {isEditing && formData.category === 'e-liquid' && (
-              <div className="space-y-3 pt-3">
+              <div className="space-y-4 pt-3">
+                {/* Add Bottles Row */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Add Bottles</label>
@@ -1316,20 +1417,95 @@ const ProductModal: React.FC<{ product?: any, onClose: () => void }> = ({ produc
                       placeholder="0"
                       className="w-full px-4 py-2.5 bg-white border border-emerald-200 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
                     />
+                    {Number(addBottleCount) > 0 && (
+                      <p className="text-[10px] font-semibold text-emerald-600">
+                        = {parseBottleSizeMl(formData.bottleSize, 30) * Math.max(0, Math.floor(Number(addBottleCount) || 0))}ml from bottles
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ML To Add</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bottle Size</label>
                     <input
                       type="text"
-                      value={`${parseBottleSizeMl(formData.bottleSize, 30) * Math.max(0, Math.floor(Number(addBottleCount) || 0))} ml`}
+                      value={`${parseBottleSizeMl(formData.bottleSize, 30)} ml each`}
                       readOnly
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 font-semibold"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 font-semibold cursor-not-allowed"
                     />
                   </div>
                 </div>
+
+                {/* Add ML / Remove ML Row */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Remove Bottles</label>
+                    <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Add ML</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={addMlCount}
+                      onChange={(e) => setAddMlCount(e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
+                      onFocus={handleNumericFocus}
+                      placeholder="e.g. 10"
+                      className="w-full px-4 py-2.5 bg-white border border-emerald-200 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Remove ML</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={removeMlCount}
+                      onChange={(e) => setRemoveMlCount(e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
+                      onFocus={handleNumericFocus}
+                      placeholder="e.g. 5"
+                      className="w-full px-4 py-2.5 bg-white border border-rose-200 rounded-xl text-slate-900 focus:ring-2 focus:ring-rose-500/20 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Live preview of new stock */}
+                {(Number(addBottleCount) > 0 || Number(addMlCount) > 0 || Number(removeMlCount) > 0) && (
+                  <div className="p-3 bg-violet-50 border border-violet-200 rounded-xl">
+                    <p className="text-[10px] font-bold text-violet-400 uppercase tracking-widest mb-1">New Stock After Save</p>
+                    {(() => {
+                      const bottleSizeMl = parseBottleSizeMl(formData.bottleSize, 30);
+                      const currentMl = Number(formData.stockQuantity) || 0;
+                      const mlFromBottles = Math.max(0, Math.floor(Number(addBottleCount) || 0)) * bottleSizeMl;
+                      const rawAdd = Math.max(0, Number(addMlCount) || 0);
+                      const rawRemove = Math.max(0, Number(removeMlCount) || 0);
+                      const newTotal = Math.max(0, currentMl + mlFromBottles + rawAdd - rawRemove);
+                      const bottles = Math.floor(newTotal / bottleSizeMl);
+                      const looseMl = Math.round(newTotal % bottleSizeMl);
+                      return (
+                        <p className="text-sm font-bold text-violet-700">
+                          {bottles} Bottle{bottles !== 1 ? 's' : ''} and {looseMl}ml ({newTotal}ml total)
+                        </p>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Device/Coil: Add / Remove Stock */}
+            {isEditing && formData.category !== 'e-liquid' && (
+              <div className="space-y-3 pt-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Add Stock</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={addStockCount}
+                      onChange={(e) => setAddStockCount(e.target.value === '' ? '' : (parseInt(e.target.value) || 0))}
+                      onFocus={handleNumericFocus}
+                      placeholder="e.g. 5"
+                      className="w-full px-4 py-2.5 bg-white border border-emerald-200 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Remove Stock</label>
                     <input
                       type="number"
                       min={0}
@@ -1340,34 +1516,15 @@ const ProductModal: React.FC<{ product?: any, onClose: () => void }> = ({ produc
                       className="w-full px-4 py-2.5 bg-white border border-rose-200 rounded-xl text-slate-900 focus:ring-2 focus:ring-rose-500/20 outline-none transition-all"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ML To Remove</label>
-                    <input
-                      type="text"
-                      value={`${parseBottleSizeMl(formData.bottleSize, 30) * Math.max(0, Math.floor(Number(removeStockCount) || 0))} ml`}
-                      readOnly
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-rose-500 font-semibold"
-                    />
+                </div>
+                {(Number(addStockCount) > 0 || Number(removeStockCount) > 0) && (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">New Stock After Save</p>
+                    <p className="text-sm font-bold text-slate-900">
+                      {Math.max(0, (Number(formData.stockQuantity) || 0) + Math.max(0, Math.floor(Number(addStockCount) || 0)) - Math.max(0, Math.floor(Number(removeStockCount) || 0)))} {formData.category === 'device' ? 'devices' : 'coils'}
+                    </p>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Non-E-Liquid: Remove Stock */}
-            {isEditing && formData.category !== 'e-liquid' && (
-              <div className="pt-3">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Remove Stock (units)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={removeStockCount}
-                    onChange={(e) => setRemoveStockCount(e.target.value === '' ? '' : (parseInt(e.target.value) || 0))}
-                    onFocus={handleNumericFocus}
-                    placeholder="0"
-                    className="w-full px-4 py-2.5 bg-white border border-rose-200 rounded-xl text-slate-900 focus:ring-2 focus:ring-rose-500/20 outline-none transition-all"
-                  />
-                </div>
+                )}
               </div>
             )}
           </div>

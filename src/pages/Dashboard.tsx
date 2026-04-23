@@ -37,12 +37,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { where } from 'firebase/firestore';
 import { useDocument } from '../hooks/useFirestore';
 import { toDisplayDate } from '../lib/dates';
+import { parseBottleSizeMl } from '../lib/bottles';
 
 const Dashboard: React.FC = () => {
   const { shopId } = useAuth();
   const { documents: products, loading: productsLoading } = useFirestore<any>(shopId ? 'products' : null, where('shopId', '==', shopId));
   const { documents: sales, loading: salesLoading } = useFirestore<any>(shopId ? 'sales' : null, where('shopId', '==', shopId));
   const { documents: expenses, loading: expensesLoading } = useFirestore<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId));
+  const { documents: credits, loading: creditsLoading } = useFirestore<any>(shopId ? 'credits' : null, where('shopId', '==', shopId));
   const { activeAlerts } = useNotifications();
   const [seeding, setSeeding] = React.useState(false);
   const [startDateStr, setStartDateStr] = React.useState('');
@@ -74,7 +76,7 @@ const Dashboard: React.FC = () => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   })();
 
-  if (productsLoading || salesLoading || expensesLoading) {
+  if (productsLoading || salesLoading || expensesLoading || creditsLoading) {
     return <LoadingSpinner />;
   }
 
@@ -128,6 +130,14 @@ const Dashboard: React.FC = () => {
 
   const periodCash = periodSales.filter(s => s.paymentMethod === 'cash').reduce((acc, s) => acc + (s.totalAmount || 0), 0);
   const periodOnline = periodSales.filter(s => (s.paymentMethod === 'online' || s.paymentMethod === 'credit')).reduce((acc, s) => acc + (s.totalAmount || 0), 0);
+  
+  const periodRecoveredCredit = credits.filter(c => {
+    if (c.transactionType !== 'taken') return false;
+    const d = toDisplayDate(c.createdAt, c.createdAtClient);
+    if (!d) return false;
+    const bDay = getBusinessDay(d).getTime();
+    return bDay >= targetStartDate.getTime() && bDay <= targetEndDate.getTime();
+  }).reduce((acc, c) => acc + (c.amount || 0), 0);
 
   const periodExpense = expenses.filter(e => {
     const d = toDisplayDate(e.expenseDate, e.createdAtClient);
@@ -271,7 +281,7 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* KPIs and Charts section follows... */}
+
 
       {/* KPI Section */}
       <div className="space-y-4">
@@ -298,6 +308,7 @@ const Dashboard: React.FC = () => {
             value={formatCurrency(periodCash)}
             icon={<Banknote size={24} className="text-white" />}
             colorClass="metric-card-emerald shadow-emerald-500/20"
+            extra={`+ ${formatCurrency(periodRecoveredCredit)} Recovered Credit`}
           />
           <MetricCard
             title={`${cardPrefix} ONLINE/CREDIT`}
@@ -443,6 +454,99 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Low Stock Products Table */}
+      {(() => {
+        const lowStockProducts = products.filter(p => {
+          const stock = Number(p.stockQuantity) || 0;
+          const minLevel = Number(p.minStockLevel) || Number(p.lowStockAlert) || 2;
+          return stock <= minLevel;
+        }).sort((a, b) => (Number(a.stockQuantity) || 0) - (Number(b.stockQuantity) || 0));
+
+        if (lowStockProducts.length === 0) return null;
+
+        return (
+          <div className="glass-card overflow-hidden mt-8">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
+                  <AlertTriangle className="text-rose-600" size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900">Low Stock Products</h3>
+                  <p className="text-slate-500 text-xs">{lowStockProducts.length} product{lowStockProducts.length !== 1 ? 's' : ''} need restocking</p>
+                </div>
+              </div>
+              <span className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-[10px] font-bold uppercase tracking-widest">{lowStockProducts.length} Items</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/50 text-slate-500 text-[10px] uppercase tracking-widest">
+                    <th className="px-6 py-3 font-bold">Product</th>
+                    <th className="px-6 py-3 font-bold">Category</th>
+                    <th className="px-6 py-3 font-bold">Current Stock</th>
+                    <th className="px-6 py-3 font-bold">Min Level</th>
+                    <th className="px-6 py-3 font-bold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {lowStockProducts.slice(0, 15).map((p) => {
+                    const stock = Number(p.stockQuantity) || 0;
+                    const minLevel = Number(p.minStockLevel) || Number(p.lowStockAlert) || 2;
+                    const isOutOfStock = stock === 0;
+                    const stockDisplay = p.category === 'e-liquid'
+                      ? (() => {
+                          const size = parseBottleSizeMl(p.bottleSize, 30);
+                          const bottles = Math.floor(stock / size);
+                          const ml = Math.round(stock % size);
+                          return `${bottles}B / ${ml}ml`;
+                        })()
+                      : `${stock} ${p.unit || 'pcs'}`;
+
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-3">
+                          <p className="text-sm font-semibold text-slate-900">{p.name}</p>
+                        </td>
+                        <td className="px-6 py-3">
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                            p.category === 'device' ? "bg-blue-100 text-blue-700" :
+                            p.category === 'coil' ? "bg-emerald-100 text-emerald-700" :
+                            "bg-fuchsia-100 text-fuchsia-700"
+                          )}>
+                            {p.category}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3">
+                          <span className={cn("text-sm font-bold", isOutOfStock ? "text-rose-600" : "text-amber-600")}>
+                            {stockDisplay}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3 text-sm text-slate-500 font-medium">{minLevel}</td>
+                        <td className="px-6 py-3">
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                            isOutOfStock ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"
+                          )}>
+                            {isOutOfStock ? 'Out of Stock' : 'Low Stock'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {lowStockProducts.length > 15 && (
+              <div className="p-4 text-center bg-slate-50/50 border-t border-slate-100">
+                <p className="text-xs text-slate-500 font-medium">Showing 15 of {lowStockProducts.length} low stock items. Check Inventory for full list.</p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Footer Badge */}
       <div className="flex justify-center pt-4">
         <div className="bg-gradient-to-r from-violet-600 to-fuchsia-600 p-[1px] rounded-full shadow-lg shadow-violet-600/20">
@@ -455,7 +559,7 @@ const Dashboard: React.FC = () => {
   );
 };
 
-const MetricCard: React.FC<{ title: string, value: string | number, icon: React.ReactNode, colorClass: string }> = ({ title, value, icon, colorClass }) => (
+const MetricCard: React.FC<{ title: string, value: string | number, icon: React.ReactNode, colorClass: string, extra?: string }> = ({ title, value, icon, colorClass, extra }) => (
   <div className={cn(colorClass, "rounded-2xl p-6 shadow-lg relative overflow-hidden group")}>
     <div className="absolute top-4 right-4 p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform duration-300">
       {icon}
@@ -463,6 +567,7 @@ const MetricCard: React.FC<{ title: string, value: string | number, icon: React.
     <div className="relative z-10">
       <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">{title}</p>
       <p className="text-3xl font-bold text-white">{value}</p>
+      {extra && <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest mt-2">{extra}</p>}
     </div>
   </div>
 );
