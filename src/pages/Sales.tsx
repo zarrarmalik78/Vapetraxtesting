@@ -665,7 +665,7 @@ const InvoiceModal: React.FC<{ sale: any, customer: any, onClose: () => void, on
                     <td className="py-4 text-right print:hidden">
                       <button
                         onClick={() => onRemoveItem(idx)}
-                        className="p-1.5 text-gray-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover/row:opacity-100 focus:opacity-100"
+                        className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
                         title="Remove item & restore stock"
                       >
                         <Trash2 size={16} />
