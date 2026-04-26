@@ -31,19 +31,21 @@ service cloud.firestore {
       return isAuth() && request.resource != null && request.resource.data.shopId == request.auth.uid;
     }
 
-    // Returns the shopId from the user's profile (supports cashiers whose shopId != their uid)
-    function getUserShopId() {
+    // Check if the current user is a valid cashier for a given shopId
+    function isValidCashier(targetShopId) {
       let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return userDoc != null ? userDoc.data.shopId : null;
+      return userDoc != null && userDoc.data.role == 'cashier' && userDoc.data.shopId == targetShopId;
     }
 
     // True if the user is an admin OR a cashier belonging to the shop that owns this document
     function canAccessDoc() {
-      return isAuth() && resource != null && (ownsCurrentDoc() || resource.data.shopId == getUserShopId());
+      let docShopId = resource.data.shopId;
+      return isAuth() && resource != null && (docShopId == request.auth.uid || isValidCashier(docShopId));
     }
 
     function canCreateDoc() {
-      return isAuth() && request.resource != null && (ownsNewDoc() || request.resource.data.shopId == getUserShopId());
+      let reqShopId = request.resource.data.shopId;
+      return isAuth() && request.resource != null && (reqShopId == request.auth.uid || isValidCashier(reqShopId));
     }
 
     // ---------------------------------------------------------------
@@ -52,7 +54,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuth() && (request.auth.uid == userId
                   || resource.data.shopId == request.auth.uid
-                  || resource.data.shopId == getUserShopId());
+                  || isValidCashier(resource.data.shopId));
       allow create: if isAuth() && (request.auth.uid == userId || request.resource.data.shopId == request.auth.uid);
       allow update: if isAuth() && (request.auth.uid == userId || resource.data.shopId == request.auth.uid);
       allow delete: if isAuth() && resource.data.shopId == request.auth.uid;

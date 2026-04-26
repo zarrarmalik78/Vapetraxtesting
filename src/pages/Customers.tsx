@@ -52,6 +52,12 @@ const Customers: React.FC = () => {
   }, [customers, searchTerm]);
 
   const handleDelete = async (id: string) => {
+    const customer = customers.find(c => c.id === id);
+    if (customer && (customer.creditBalance || 0) > 0) {
+      toast.error('Cannot delete: Customer has an outstanding credit balance.');
+      return;
+    }
+    
     if (window.confirm('Are you sure you want to delete this customer?')) {
       try {
         await deleteDoc(doc(db, 'customers', id));
@@ -72,6 +78,18 @@ const Customers: React.FC = () => {
 
   const handleBulkDelete = async () => {
     if (!selectedIds.length) return;
+    
+    // Check if any selected customer has outstanding credit
+    const hasCredit = selectedIds.some(id => {
+      const c = customers.find(x => x.id === id);
+      return c && (c.creditBalance || 0) > 0;
+    });
+    
+    if (hasCredit) {
+      toast.error('Cannot delete: One or more selected customers have an outstanding credit balance.');
+      return;
+    }
+
     setBulkDeleting(true);
     try {
       if (needsPassword && currentUser) {

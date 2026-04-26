@@ -705,47 +705,50 @@ const NewSale: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-4 space-y-4 style-scrollbar">
           {cart.length > 0 ? (
             cart.map((item, index) => (
-              <div key={index} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-4 shadow-sm group hover:border-violet-200 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <p className="text-base font-bold text-slate-900 truncate">{item.productName}</p>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+              <div key={index} className="bg-white p-4 rounded-[20px] border border-slate-100 flex flex-col gap-3 shadow-sm group hover:border-violet-200 transition-all">
+                {/* Product Name - Top Row */}
+                <div className="min-w-0">
+                  <p className="text-base font-bold text-slate-900 leading-tight block">{item.productName}</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
                     {item.saleType.replace('_', ' ')} {item.refillAmount ? `• ${item.refillAmount}ml` : ''}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 bg-slate-50 rounded-xl p-1 border border-slate-100">
-                  <button
-                    onClick={() => updateQuantity(index, -1)}
-                    className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg text-slate-600 transition-all hover:shadow-sm"
-                  >
-                    <Minus size={14} />
-                  </button>
-                  <span className="text-base font-bold text-slate-900 min-w-[24px] text-center">{item.quantity}</span>
-                  <button
-                    onClick={() => updateQuantity(index, 1)}
-                    className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg text-slate-600 transition-all hover:shadow-sm"
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
+                {/* Bottom Row: Actions & Price */}
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-50">
+                  <div className="flex items-center gap-2 bg-slate-50 rounded-xl p-1 border border-slate-100/50">
+                    <button
+                      onClick={() => updateQuantity(index, -1)}
+                      className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg text-slate-600 transition-all hover:shadow-sm"
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <span className="text-sm font-bold text-slate-900 min-w-[20px] text-center">{item.quantity}</span>
+                    <button
+                      onClick={() => updateQuantity(index, 1)}
+                      className="w-8 h-8 flex items-center justify-center hover:bg-white rounded-lg text-slate-600 transition-all hover:shadow-sm"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
 
-                <div className="flex flex-col items-end gap-2 shrink-0 min-w-[120px]">
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={item.unitPrice}
-                    onChange={(e) => updateUnitPrice(index, parseFloat(e.target.value) || 0)}
-                    className="w-[96px] text-right px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold shadow-sm focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-300 transition-all"
-                    aria-label="Unit sale price"
-                  />
-                  <p className="text-base font-bold text-violet-600">{formatCurrency(item.unitPrice * item.quantity)}</p>
-                  <button
-                    onClick={() => removeFromCart(index)}
-                    className="text-slate-300 hover:text-rose-500 transition-colors p-1"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-end">
+                      <input
+                        type="number"
+                        value={item.unitPrice}
+                        onChange={(e) => updateUnitPrice(index, parseFloat(e.target.value) || 0)}
+                        className="w-[80px] text-right px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all"
+                      />
+                      <p className="text-sm font-bold text-violet-600 mt-1">{formatCurrency(item.unitPrice * item.quantity)}</p>
+                    </div>
+                    <button
+                      onClick={() => removeFromCart(index)}
+                      className="text-slate-300 hover:text-rose-500 p-1.5 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
