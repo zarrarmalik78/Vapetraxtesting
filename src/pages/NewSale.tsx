@@ -535,11 +535,11 @@ const NewSale: React.FC = () => {
   if (productsLoading || customersLoading) return <LoadingSpinner />;
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6 w-full h-[calc(100vh-112px)] min-h-[700px] animate-in fade-in duration-500 pb-2">
+    <div className="flex flex-col xl:grid xl:grid-cols-[1fr_380px] gap-6 w-full h-auto xl:h-[calc(100vh-112px)] xl:min-h-[700px] animate-in fade-in duration-500 pb-2">
       {/* Left Panel: Product Selection */}
-      <div className="flex flex-col gap-6 min-w-0 h-full overflow-hidden">
+      <div className="flex flex-col gap-6 min-w-0 xl:h-full overflow-visible xl:overflow-hidden order-2 xl:order-1">
         {/* Header */}
-        <div className="shrink-0">
+        <div className="shrink-0 pl-14 md:pl-0">
           <h1 className="text-[32px] font-extrabold text-slate-900 tracking-tight">Billing</h1>
           <p className="text-slate-400 mt-1 text-base">Select products to generate a new bill.</p>
         </div>
@@ -557,7 +557,7 @@ const NewSale: React.FC = () => {
         </div>
 
         {/* Product Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 overflow-y-auto pb-6 pr-2 -mr-2 style-scrollbar">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 xl:overflow-y-auto pb-6 xl:pr-2 xl:-mr-2 style-scrollbar">
           {displayProducts.map((product) => {
             const isOutOfStock = product.stockQuantity <= 0;
             const isELiquid = product.category === 'e-liquid';
@@ -687,7 +687,7 @@ const NewSale: React.FC = () => {
       </div>
 
       {/* Right Panel: Cart & Checkout */}
-      <div className="flex flex-col bg-white border border-slate-200 rounded-[32px] overflow-hidden shadow-sm h-full min-h-0">
+      <div className="flex flex-col bg-white border border-slate-200 rounded-[32px] overflow-hidden shadow-sm h-auto xl:h-full min-h-0 order-1 xl:order-2">
         {/* Cart Header */}
         <div className="p-6 flex items-center justify-between border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-4">
@@ -702,7 +702,7 @@ const NewSale: React.FC = () => {
         </div>
 
         {/* Cart Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 style-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 style-scrollbar max-h-[40vh] xl:max-h-none">
           {cart.length > 0 ? (
             cart.map((item, index) => (
               <div key={index} className="bg-white p-4 rounded-[20px] border border-slate-100 flex flex-col gap-3 shadow-sm group hover:border-violet-200 transition-all">

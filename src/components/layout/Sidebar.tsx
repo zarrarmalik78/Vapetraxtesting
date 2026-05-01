@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -19,7 +19,10 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Plus
+  Plus,
+  Moon,
+  Sun,
+  Home
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useConnectivity } from '../../hooks/useConnectivity';
@@ -30,6 +33,22 @@ const Sidebar: React.FC = () => {
   const { currentUser, userRole, shopId, logout } = useAuth();
   const { status: connectivityStatus } = useConnectivity();
   const { document: settings } = useDocument<any>('settings', shopId || 'shop_settings');
+
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem('theme') === 'dark' || 
+      (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
@@ -57,6 +76,7 @@ const Sidebar: React.FC = () => {
 
   const bottomNavItems = [
     { name: 'Sales History', path: '/sales', icon: History, roles: ['admin', 'cashier'] },
+    { name: 'Personal Expenses', path: '/personal-expenses', icon: Home, roles: ['admin'] },
     { name: 'Analytics', path: '/analytics', icon: BarChart3, roles: ['admin'] },
     { name: 'Detailed Reports', path: '/reports/detailed', icon: FileText, roles: ['admin'] },
   ];
@@ -198,7 +218,7 @@ const Sidebar: React.FC = () => {
                 "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group",
                 isActive
                   ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
               )}
               onClick={() => setMobileOpen(false)}
             >
@@ -209,6 +229,21 @@ const Sidebar: React.FC = () => {
               {!collapsed && <span className="text-sm font-bold uppercase tracking-wider">Settings</span>}
             </NavLink>
           )}
+
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white group",
+              collapsed ? "justify-center" : ""
+            )}
+          >
+            {isDarkMode ? (
+              <Sun size={20} className="min-w-[20px]" />
+            ) : (
+              <Moon size={20} className="min-w-[20px]" />
+            )}
+            {!collapsed && <span className="text-sm font-bold uppercase tracking-wider">{isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>}
+          </button>
 
           <button
             onClick={handleLogout}

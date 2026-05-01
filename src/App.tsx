@@ -19,6 +19,7 @@ import Credits from './pages/Credits';
 
 
 import Expenses from './pages/Expenses';
+import PersonalExpenses from './pages/PersonalExpenses';
 import Analytics from './pages/Analytics';
 import DetailedReports from './pages/DetailedReports';
 import InventoryLogs from './pages/InventoryLogs';
@@ -102,6 +103,12 @@ function App() {
             <Route path="/expenses" element={
               <ProtectedRoute>
                 <Layout><Expenses /></Layout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/personal-expenses" element={
+              <ProtectedRoute requiredRole="admin">
+                <Layout><PersonalExpenses /></Layout>
               </ProtectedRoute>
             } />
             

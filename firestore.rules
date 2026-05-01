@@ -105,6 +105,15 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------
+    // Personal Expenses (Owner Only)
+    // ---------------------------------------------------------------
+    match /personal_expenses/{expenseId} {
+      allow read:          if ownsCurrentDoc();
+      allow create:        if ownsNewDoc();
+      allow update, delete: if ownsCurrentDoc();
+    }
+
+    // ---------------------------------------------------------------
     // Credits
     // ---------------------------------------------------------------
     match /credits/{creditId} {

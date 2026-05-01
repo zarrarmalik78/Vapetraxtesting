@@ -14,7 +14,7 @@ import {
   FileDown,
   Calendar
 } from 'lucide-react';
-import { getSalesCogs } from '../lib/finance';
+import { getSalesCogs, getSaleItemCogs } from '../lib/finance';
 import { seedSampleData } from '../lib/seedData';
 import toast from 'react-hot-toast';
 import { useFirestore } from '../hooks/useFirestore';
@@ -30,7 +30,10 @@ import {
   ResponsiveContainer,
   Cell,
   AreaChart,
-  Area
+  Area,
+  ScatterChart,
+  Scatter,
+  ZAxis
 } from 'recharts';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
@@ -188,6 +191,53 @@ const Dashboard: React.FC = () => {
     color: categoryColors[name] || '#94a3b8'
   }));
 
+  // Heatmap Data (Sales by hour)
+  const heatmapDataRaw = Array(24).fill(0);
+  sales.forEach(s => {
+    const d = toDisplayDate(s.saleDate, s.saleDateClient);
+    if (d) {
+      heatmapDataRaw[d.getHours()] += (s.totalAmount || 0);
+    }
+  });
+  
+  let startHour = 23; let endHour = 0;
+  heatmapDataRaw.forEach((val, i) => { if(val>0) { startHour=Math.min(startHour,i); endHour=Math.max(endHour,i);} });
+  startHour = Math.max(0, startHour - 1);
+  endHour = Math.min(23, endHour + 1);
+  if (startHour > endHour) { startHour = 9; endHour = 21; } // Default if no sales
+  
+  const heatmapData: any[] = [];
+  for(let i=startHour; i<=endHour; i++) {
+    const ampm = i >= 12 ? 'PM' : 'AM';
+    const hour = i % 12 || 12;
+    heatmapData.push({ hour: `${hour}${ampm}`, revenue: heatmapDataRaw[i] });
+  }
+
+  // Margin vs Volume Scatter Data
+  const productPerformance: Record<string, { volume: number, revenue: number, cost: number, name: string }> = {};
+  sales.forEach(s => {
+    (s.items || []).forEach((item: any) => {
+      const pid = item.productId;
+      if (!productPerformance[pid]) {
+        productPerformance[pid] = { volume: 0, revenue: 0, cost: 0, name: item.productName };
+      }
+      productPerformance[pid].volume += (item.quantity || 1);
+      productPerformance[pid].revenue += (item.totalPrice || 0);
+      productPerformance[pid].cost += getSaleItemCogs(item, products);
+    });
+  });
+
+  const topProductsData = Object.values(productPerformance).map(p => {
+    const profit = p.revenue - p.cost;
+    const margin = p.revenue > 0 ? (profit / p.revenue) * 100 : 0;
+    return {
+      name: p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name,
+      volume: p.volume,
+      revenue: p.revenue,
+      margin: Math.round(margin * 10) / 10,
+    };
+  }).filter(p => p.volume > 0).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-12">
       {/* Header */}
@@ -250,36 +300,6 @@ const Dashboard: React.FC = () => {
           </button>
         )}
       </header>
-
-      {/* Low Stock Alerts */}
-      {activeAlerts.length > 0 && (
-        <div className="glass-card p-6 border-l-4 border-l-amber-500">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-              <AlertTriangle className="text-amber-600" size={20} />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-900">Low Stock Alerts</h3>
-              <p className="text-slate-500 text-xs">{activeAlerts.length} product{activeAlerts.length !== 1 ? 's' : ''} below minimum stock level</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {activeAlerts.map((alert) => (
-              <div key={alert.id} className="flex items-center gap-3 bg-amber-50 border border-amber-100 rounded-xl p-3 transition-all hover:shadow-sm">
-                <div className="w-8 h-8 rounded-lg bg-amber-200 flex items-center justify-center flex-shrink-0">
-                  <Package size={16} className="text-amber-700" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-slate-800 truncate">{alert.productName}</p>
-                  <p className="text-xs text-amber-700 font-medium">
-                    Stock: <span className="font-bold text-red-600">{alert.currentStock}</span> / Min: {alert.minStockLevel}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
 
 
@@ -344,6 +364,93 @@ const Dashboard: React.FC = () => {
             icon={<DollarSign size={24} className="text-white" />}
             colorClass="metric-card-cyan shadow-cyan-500/20"
           />
+        </div>
+      </div>
+
+      {/* New Graphs: Peak Hours & Margin vs Volume */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        {/* Peak Hours Heatmap */}
+        <div className="glass-card p-6">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Peak Hours</h3>
+              <p className="text-xs text-slate-500 font-medium">Busiest times by revenue</p>
+            </div>
+            <Clock size={20} className="text-amber-500" />
+          </div>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%" minHeight={0} minWidth={0}>
+              <BarChart data={heatmapData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis 
+                  dataKey="hour" 
+                  stroke="#94a3b8" 
+                  fontSize={10} 
+                  tickLine={false} 
+                  axisLine={false}
+                  dy={10}
+                />
+                <YAxis 
+                  stroke="#94a3b8" 
+                  fontSize={10} 
+                  tickLine={false} 
+                  axisLine={false}
+                  tickFormatter={(val) => `${val/1000}k`}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  formatter={(value: any) => [formatCurrency(value), 'Revenue']}
+                />
+                <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
+                  {heatmapData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.revenue > 10000 ? '#f59e0b' : '#fbbf24'} 
+                      fillOpacity={entry.revenue > 0 ? 1 : 0.3}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Top Products Bar Chart */}
+        <div className="glass-card p-6">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Top Performers</h3>
+              <p className="text-xs text-slate-500 font-medium">Highest revenue products</p>
+            </div>
+            <Activity size={20} className="text-emerald-500" />
+          </div>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%" minHeight={0} minWidth={0}>
+              <BarChart data={topProductsData} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                <XAxis type="number" hide />
+                <YAxis 
+                  type="category" 
+                  dataKey="name" 
+                  stroke="#94a3b8" 
+                  fontSize={10} 
+                  tickLine={false} 
+                  axisLine={false}
+                  width={100}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  formatter={(value: any, name: string) => [
+                    name === 'revenue' ? formatCurrency(value) : value, 
+                    name === 'revenue' ? 'Revenue' : 'Units Sold'
+                  ]}
+                />
+                <Bar dataKey="revenue" fill="#10b981" radius={[0, 4, 4, 0]} barSize={20} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 
@@ -454,7 +561,98 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Low Stock Products Table Removed */}
+      {/* Low Stock Products Table */}
+      {(() => {
+        const lowStockProducts = products.filter(p => {
+          const stock = Number(p.stockQuantity) || 0;
+          const minLevel = Number(p.minStockLevel) || Number(p.lowStockAlert) || 2;
+          return stock <= minLevel;
+        }).sort((a, b) => (Number(a.stockQuantity) || 0) - (Number(b.stockQuantity) || 0));
+
+        if (lowStockProducts.length === 0) return null;
+
+        return (
+          <div className="glass-card overflow-hidden mt-8">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
+                  <AlertTriangle className="text-rose-600" size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900">Low Stock Products</h3>
+                  <p className="text-slate-500 text-xs">{lowStockProducts.length} product{lowStockProducts.length !== 1 ? 's' : ''} need restocking</p>
+                </div>
+              </div>
+              <span className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-[10px] font-bold uppercase tracking-widest">{lowStockProducts.length} Items</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/50 text-slate-500 text-[10px] uppercase tracking-widest">
+                    <th className="px-6 py-3 font-bold">Product</th>
+                    <th className="px-6 py-3 font-bold">Category</th>
+                    <th className="px-6 py-3 font-bold">Current Stock</th>
+                    <th className="px-6 py-3 font-bold">Min Level</th>
+                    <th className="px-6 py-3 font-bold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {lowStockProducts.slice(0, 15).map((p) => {
+                    const stock = Number(p.stockQuantity) || 0;
+                    const minLevel = Number(p.minStockLevel) || Number(p.lowStockAlert) || 2;
+                    const isOutOfStock = stock === 0;
+                    const stockDisplay = p.category === 'e-liquid'
+                      ? (() => {
+                          const size = parseBottleSizeMl(p.bottleSize, 30);
+                          const bottles = Math.floor(stock / size);
+                          const ml = Math.round(stock % size);
+                          return `${bottles}B / ${ml}ml`;
+                        })()
+                      : `${stock} ${p.unit || 'pcs'}`;
+
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-3">
+                          <p className="text-sm font-semibold text-slate-900">{p.name}</p>
+                        </td>
+                        <td className="px-6 py-3">
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                            p.category === 'device' ? "bg-blue-100 text-blue-700" :
+                            p.category === 'coil' ? "bg-emerald-100 text-emerald-700" :
+                            "bg-fuchsia-100 text-fuchsia-700"
+                          )}>
+                            {p.category}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3">
+                          <span className={cn("text-sm font-bold", isOutOfStock ? "text-rose-600" : "text-amber-600")}>
+                            {stockDisplay}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3 text-sm text-slate-500 font-medium">{minLevel}</td>
+                        <td className="px-6 py-3">
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                            isOutOfStock ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"
+                          )}>
+                            {isOutOfStock ? 'Out of Stock' : 'Low Stock'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {lowStockProducts.length > 15 && (
+              <div className="p-4 text-center bg-slate-50/50 border-t border-slate-100">
+                <p className="text-xs text-slate-500 font-medium">Showing 15 of {lowStockProducts.length} low stock items. Check Inventory for full list.</p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Footer Badge */}
       <div className="flex justify-center pt-4">
