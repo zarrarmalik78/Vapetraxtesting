@@ -105,12 +105,12 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------
-    // Personal Expenses (Owner Only)
+    // Personal Expenses (Isolated)
     // ---------------------------------------------------------------
     match /personal_expenses/{expenseId} {
-      allow read:          if ownsCurrentDoc();
-      allow create:        if ownsNewDoc();
-      allow update, delete: if ownsCurrentDoc();
+      allow read:          if canAccessDoc();
+      allow create:        if canCreateDoc();
+      allow update, delete: if canAccessDoc();
     }
 
     // ---------------------------------------------------------------
