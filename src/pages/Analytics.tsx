@@ -36,6 +36,7 @@ import { where } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { getSalesCogs } from '../lib/finance';
 import { toDisplayDate } from '../lib/dates';
+import * as XLSX from 'xlsx';
 
 const Analytics: React.FC = () => {
   const { shopId } = useAuth();
@@ -122,6 +123,20 @@ const Analytics: React.FC = () => {
       value: paymentData[method]
     }));
 
+    // Expense Breakdown Data
+    const expenseData: any = {};
+    filteredExpenses.forEach(e => {
+      const category = e.category || 'Other';
+      expenseData[category] = (expenseData[category] || 0) + (e.amount || 0);
+    });
+    const expensePieData = Object.keys(expenseData).map(c => ({
+      name: c,
+      value: expenseData[c]
+    })).sort((a, b) => b.value - a.value);
+
+    // Filtered Products for Export
+    const filteredProductsForExport = products;
+
     return {
       totalRevenue,
       totalCOGS,
@@ -129,6 +144,10 @@ const Analytics: React.FC = () => {
       totalProfit,
       chartData,
       pieData,
+      expensePieData,
+      filteredSales,
+      filteredExpenses,
+      filteredProductsForExport,
       salesCount: filteredSales.length
     };
   }, [sales, expenses, products, salesLoading, expensesLoading, timeRange]);
@@ -184,6 +203,49 @@ const Analytics: React.FC = () => {
               />
             </div>
           )}
+          <button
+            onClick={() => {
+              if (!stats) return;
+              const wb = XLSX.utils.book_new();
+              
+              // Sales Sheet
+              const salesWs = XLSX.utils.json_to_sheet(stats.filteredSales.map((s: any) => ({
+                ID: s.id,
+                Date: format(toDisplayDate(s.saleDate, s.saleDateClient) || new Date(), 'yyyy-MM-dd'),
+                Revenue: s.totalAmount,
+                COGS: s.totalCOGS ?? getSalesCogs([s], products),
+                Profit: s.totalProfit ?? (s.totalAmount - (s.totalCOGS ?? getSalesCogs([s], products))),
+                Payment: s.paymentMethod
+              })));
+              XLSX.utils.book_append_sheet(wb, salesWs, "Sales");
+
+              // Expenses Sheet
+              const expWs = XLSX.utils.json_to_sheet(stats.filteredExpenses.map((e: any) => ({
+                Date: format(e.expenseDate?.toDate ? e.expenseDate.toDate() : new Date(e.expenseDate), 'yyyy-MM-dd'),
+                Category: e.category,
+                Amount: e.amount,
+                Description: e.description
+              })));
+              XLSX.utils.book_append_sheet(wb, expWs, "Expenses");
+
+              // Inventory/Products Sheet
+              const invWs = XLSX.utils.json_to_sheet(stats.filteredProductsForExport.map((p: any) => ({
+                Name: p.name,
+                Category: p.category,
+                Stock: p.stockQuantity,
+                Cost: p.costPrice,
+                Price: p.sellPrice,
+                TotalValue: p.stockQuantity * p.costPrice
+              })));
+              XLSX.utils.book_append_sheet(wb, invWs, "Inventory Value");
+
+              XLSX.writeFile(wb, `VapeTrax_Business_Report_${timeRange}.xlsx`);
+            }}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all"
+          >
+            <Download size={16} />
+            Export Data
+          </button>
         </div>
       </header>
 
@@ -207,8 +269,8 @@ const Analytics: React.FC = () => {
           title="Net Profit" 
           value={formatCurrency(stats?.totalProfit || 0)} 
           icon={<TrendingUp className="text-emerald-600" />}
-          trend="+18.2%"
-          isUp={true}
+          trend={stats?.totalRevenue ? `${((stats.totalProfit / stats.totalRevenue) * 100).toFixed(1)}% Margin` : '0%'}
+          isUp={stats?.totalProfit ? stats.totalProfit > 0 : false}
         />
         <MetricCard 
           title="COGS" 
@@ -290,15 +352,15 @@ const Analytics: React.FC = () => {
             <Filter size={20} className="text-fuchsia-600" />
             Payment Methods
           </h3>
-          <div className="h-[300px] w-full">
+          <div className="h-[250px] w-full">
             <ResponsiveContainer width="100%" height="100%" minHeight={0} minWidth={0}>
               <PieChart>
                 <Pie
                   data={stats?.pieData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={70}
-                  outerRadius={100}
+                  innerRadius={60}
+                  outerRadius={90}
                   paddingAngle={8}
                   dataKey="value"
                 >
@@ -315,16 +377,10 @@ const Analytics: React.FC = () => {
                     padding: '12px'
                   }}
                 />
-                <Legend 
-                  verticalAlign="bottom" 
-                  height={36}
-                  iconType="circle"
-                  formatter={(value) => <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">{value}</span>}
-                />
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-8 space-y-4">
+          <div className="mt-4 space-y-3">
             {stats?.pieData.map((item: any, index: number) => (
               <div key={item.name} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -334,6 +390,57 @@ const Analytics: React.FC = () => {
                 <span className="text-sm font-bold text-slate-900">{item.value} sales</span>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Expense Breakdown Pie Chart */}
+        <div className="glass-card p-8">
+          <h3 className="text-lg font-bold text-slate-900 tracking-tight mb-8 flex items-center gap-2">
+            <ShoppingBag size={20} className="text-red-500" />
+            Expense Breakdown
+          </h3>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%" minHeight={0} minWidth={0}>
+              <PieChart>
+                <Pie
+                  data={stats?.expensePieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={8}
+                  dataKey="value"
+                >
+                  {stats?.expensePieData.map((entry: any, index: number) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} stroke="none" />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    border: 'none',
+                    borderRadius: '16px',
+                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+                    padding: '12px'
+                  }}
+                  formatter={(value: any) => formatCurrency(value)}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 space-y-3 overflow-y-auto max-h-[120px] style-scrollbar pr-2">
+            {stats?.expensePieData.map((item: any, index: number) => (
+              <div key={item.name} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[(index + 2) % COLORS.length] }}></div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate max-w-[100px]">{item.name}</span>
+                </div>
+                <span className="text-xs font-bold text-slate-900">{formatCurrency(item.value)}</span>
+              </div>
+            ))}
+            {(!stats?.expensePieData || stats.expensePieData.length === 0) && (
+              <p className="text-sm text-slate-400 text-center">No expenses recorded</p>
+            )}
           </div>
         </div>
       </div>

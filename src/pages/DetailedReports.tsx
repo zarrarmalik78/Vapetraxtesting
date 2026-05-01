@@ -19,6 +19,7 @@ import { where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import * as XLSX from 'xlsx';
 import { toDisplayDate } from '../lib/dates';
+import { getSalesCogs } from '../lib/finance';
 
 const DetailedReports: React.FC = () => {
   const { shopId } = useAuth();
@@ -153,24 +154,8 @@ const DetailedReports: React.FC = () => {
 
         const totalRevenue = filteredSales.reduce((acc, s) => acc + (s.totalAmount || 0), 0);
 
-        // COGS: sum of costPrice * quantity from each sale item
         const totalCOGS = filteredSales.reduce((acc, s) => {
-          if (!s.items) return acc;
-          return acc + s.items.reduce((itemAcc: number, item: any) => {
-            if (item.costPrice != null) {
-              return itemAcc + (item.costPrice * item.quantity);
-            }
-            // Fallback: lookup product cost from current products
-            const prod = products.find((p: any) => p.id === item.productId);
-            if (prod) {
-              if (item.saleType === 'refill') {
-                const costPerMl = prod.costPrice / (parseInt(prod.bottleSize) || 30);
-                return itemAcc + (costPerMl * (item.refillAmount || 0) * item.quantity);
-              }
-              return itemAcc + (prod.costPrice * item.quantity);
-            }
-            return itemAcc;
-          }, 0);
+          return acc + (s.totalCOGS ?? getSalesCogs([s], products));
         }, 0);
 
         const totalExpensesAmt = filteredExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);

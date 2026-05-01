@@ -736,9 +736,10 @@ const NewSale: React.FC = () => {
                     <div className="flex flex-col items-end">
                       <input
                         type="number"
+                        inputMode="decimal"
                         value={item.unitPrice}
                         onChange={(e) => updateUnitPrice(index, parseFloat(e.target.value) || 0)}
-                        className="w-[80px] text-right px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all"
+                        className="w-[90px] text-right px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all touch-manipulation"
                       />
                       <p className="text-sm font-bold text-violet-600 mt-1">{formatCurrency(item.unitPrice * item.quantity)}</p>
                     </div>
