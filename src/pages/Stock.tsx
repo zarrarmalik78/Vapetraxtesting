@@ -66,6 +66,9 @@ const Stock: React.FC = () => {
   const [deleteTyped, setDeleteTyped] = useState('');
   const [deletePassword, setDeletePassword] = useState('');
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<any | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const filteredProducts = useMemo(() => {
     let result = products.filter(p => 
@@ -93,14 +96,61 @@ const Stock: React.FC = () => {
     }));
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
-      try {
-        await deleteDoc(doc(db, 'products', id));
-        toast.success('Product deleted successfully');
-      } catch (error) {
-        toast.error('Failed to delete product');
+  const handleDelete = (product: any) => {
+    setProductToDelete(product);
+    setDeleteReason('');
+    setDeletePassword('');
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!productToDelete) return;
+    if (!deleteReason.trim()) {
+      toast.error('Please provide a reason for deletion');
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      if (needsPassword && currentUser) {
+        await reauthenticateForSensitiveAction(currentUser, deletePassword);
       }
+      
+      const isELiquid = productToDelete.category === 'e-liquid';
+      const currentStock = Number(productToDelete.stockQuantity) || 0;
+      
+      const logPayload: any = {
+        productId: productToDelete.id,
+        productName: productToDelete.name,
+        shopId,
+        action: 'deduction',
+        type: 'deduction',
+        change: -currentStock,
+        quantityChange: isELiquid ? 0 : -currentStock,
+        newStock: 0,
+        reason: 'Product Deletion',
+        notes: deleteReason,
+        ...buildActorMeta({ currentUser, userRole }),
+        createdAt: serverTimestamp(),
+        createdAtClient: new Date()
+      };
+
+      if (isELiquid) {
+        logPayload.mlChange = -currentStock;
+        logPayload.newStockMl = 0;
+      }
+
+      await addDoc(collection(db, 'inventoryLogs'), logPayload);
+
+      await deleteDoc(doc(db, 'products', productToDelete.id));
+      toast.success('Product deleted successfully');
+      setProductToDelete(null);
+      setDeleteReason('');
+      setDeletePassword('');
+    } catch (error: any) {
+      const code = error?.code || '';
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') toast.error('Incorrect password.');
+      else toast.error(error?.message || 'Failed to delete product');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -594,7 +644,7 @@ const Stock: React.FC = () => {
                           <Edit2 size={18} />
                         </button>
                         <button 
-                          onClick={() => handleDelete(product.id)}
+                          onClick={() => handleDelete(product)}
                           className="p-2 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-all" 
                           title="Delete"
                         >
@@ -742,6 +792,68 @@ const Stock: React.FC = () => {
                   className="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
                 >
                   {uploadingImport ? 'Uploading...' : `Import ${importRows.filter(r => r.isValid).length} Product(s)`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {productToDelete && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <h2 className="text-xl font-bold text-slate-900">Delete Product</h2>
+              <button 
+                onClick={() => setProductToDelete(null)}
+                className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-sm">
+                <p>Are you sure you want to delete <strong>{productToDelete.name}</strong>? This action cannot be undone and will remove all stock.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Reason for Deletion</label>
+                <textarea 
+                  required
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="Why are you deleting this product?"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none resize-none h-24"
+                />
+              </div>
+
+              {needsPassword && (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Account Password</label>
+                  <input 
+                    type="password"
+                    required
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    placeholder="Enter your login password"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="button"
+                  onClick={() => setProductToDelete(null)}
+                  className="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all uppercase tracking-widest text-xs"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting || !deleteReason.trim() || (needsPassword && !deletePassword.trim())}
+                  className="flex-1 py-3 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-lg shadow-rose-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest text-xs"
+                >
+                  {isDeleting ? 'Deleting...' : 'Confirm Delete'}
                 </button>
               </div>
             </div>
