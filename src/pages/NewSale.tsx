@@ -12,7 +12,8 @@ import {
   Droplet,
   Droplets,
   Package,
-  Receipt
+  Receipt,
+  Check
 } from 'lucide-react';
 import { useFirestore } from '../hooks/useFirestore';
 import { formatCurrency, cn } from '../lib/utils';
@@ -74,6 +75,7 @@ const NewSale: React.FC = () => {
     localStorage.setItem('vapetrax_cart', JSON.stringify(cart));
   }, [cart]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [showRefillModal, setShowRefillModal] = useState<{ product: any } | null>(null);
   const [refillAmount, setRefillAmount] = useState<number>(3.0);
   const [refillModalBottles, setRefillModalBottles] = useState<BottleDoc[] | null>(null);
@@ -517,7 +519,8 @@ const NewSale: React.FC = () => {
       setSelectedCustomerId(null);
       setPaymentMethod('cash');
       setIsProcessing(false);
-      toast.success('Sale saved instantly. Syncing in background...');
+      setShowSuccessOverlay(true);
+      setTimeout(() => setShowSuccessOverlay(false), 2000);
 
       void pendingCommit.catch((error: any) => {
         console.error('Sale background sync error:', error);
@@ -536,6 +539,19 @@ const NewSale: React.FC = () => {
 
   return (
     <div className="flex flex-col xl:grid xl:grid-cols-[1fr_380px] gap-6 w-full h-auto xl:h-[calc(100vh-112px)] xl:min-h-[700px] animate-in fade-in duration-500 pb-2">
+      {showSuccessOverlay && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white rounded-[32px] p-12 flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in-75 duration-300 transform">
+            <div className="w-28 h-28 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center animate-bounce shadow-inner shadow-emerald-500/20">
+              <Check size={56} strokeWidth={4} />
+            </div>
+            <div className="text-center">
+              <h2 className="text-4xl font-black text-slate-900 tracking-tight mb-3">Sale Completed!</h2>
+              <p className="text-slate-500 font-medium text-lg">Your cart has been cleared.</p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Left Panel: Product Selection */}
       <div className="flex flex-col gap-6 min-w-0 xl:h-full overflow-visible xl:overflow-hidden order-2 xl:order-1">
         {/* Header */}
