@@ -7,6 +7,7 @@ import ProtectedRoute from './components/layout/ProtectedRoute';
 import Sidebar from './components/layout/Sidebar';
 import ConnectivityBadge from './components/ui/ConnectivityBadge';
 import EidBanner from './components/ui/EidBanner';
+import PwaUpdatePrompt from './components/ui/PwaUpdatePrompt';
 import { useBackgroundTasks } from './hooks/useBackgroundTasks';
 
 // Pages
@@ -56,6 +57,7 @@ function App() {
               border: '1px solid #e2e8f0',
             },
           }} />
+          <PwaUpdatePrompt />
           <Routes>
             <Route path="/login" element={<Login />} />
             
