@@ -1,0 +1,183 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Admin and staff accounts.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "cashier"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["username", "email", "role"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Inventory items.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string", "enum": ["device", "coil", "e-liquid"] },
+        "brand": { "type": "string" },
+        "costPrice": { "type": "number" },
+        "sellingPrice": { "type": "number" },
+        "stockQuantity": { "type": "number" },
+        "minStockLevel": { "type": "number" },
+        "unit": { "type": "string" },
+        "bottleSize": { "type": "string" },
+        "nicotineLevel": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "category", "costPrice", "sellingPrice", "stockQuantity"]
+    },
+    "Bottle": {
+      "title": "Bottle",
+      "description": "Individual e-liquid bottle tracking.",
+      "type": "object",
+      "properties": {
+        "bottleSize": { "type": "number" },
+        "remainingMl": { "type": "number" },
+        "status": { "type": "string", "enum": ["closed", "opened", "empty", "sold"] },
+        "openedDate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["bottleSize", "remainingMl", "status"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer information.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "creditBalance": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Supplier information.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "city": { "type": "string" },
+        "contactNumber": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    },
+    "Purchase": {
+      "title": "Purchase",
+      "description": "Inventory purchase records.",
+      "type": "object",
+      "properties": {
+        "supplierId": { "type": "string" },
+        "productId": { "type": "string" },
+        "quantity": { "type": "number" },
+        "purchasePrice": { "type": "number" },
+        "purchaseDate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["supplierId", "productId", "quantity", "purchasePrice", "purchaseDate"]
+    },
+    "Sale": {
+      "title": "Sale",
+      "description": "Sales records.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["cash", "online", "credit", "return"] },
+        "saleDate": { "type": "string", "format": "date-time" },
+        "items": { "type": "array" }
+      },
+      "required": ["totalAmount", "paymentMethod", "saleDate", "items"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Operating expenses.",
+      "type": "object",
+      "properties": {
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "expenseDate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["category", "amount", "expenseDate"]
+    },
+    "Credit": {
+      "title": "Credit",
+      "description": "Manual credit/debt transactions.",
+      "type": "object",
+      "properties": {
+        "creditType": { "type": "string", "enum": ["customer", "supplier", "others"] },
+        "customerId": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "entityName": { "type": "string" },
+        "entityContact": { "type": "string" },
+        "amount": { "type": "number" },
+        "description": { "type": "string" },
+        "transactionType": { "type": "string", "enum": ["given", "taken"] },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["creditType", "amount", "transactionType", "createdBy"]
+    },
+    "InventoryLog": {
+      "title": "InventoryLog",
+      "description": "Audit trail for stock changes.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "action": { "type": "string" },
+        "quantityChange": { "type": "number" },
+        "previousStock": { "type": "number" },
+        "newStock": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "action", "quantityChange", "previousStock", "newStock"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Shop branding and invoice settings.",
+      "type": "object",
+      "properties": {
+        "shopName": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "shopAddress": { "type": "string" },
+        "shopPhone": { "type": "string" },
+        "shopEmail": { "type": "string" },
+        "showShopAddress": { "type": "boolean" },
+        "showShopPhone": { "type": "boolean" },
+        "showShopEmail": { "type": "boolean" },
+        "showCustomerDetails": { "type": "boolean" },
+        "showPaymentMethod": { "type": "boolean" },
+        "showTaxDetails": { "type": "boolean" },
+        "taxRate": { "type": "number" },
+        "footerMessage": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{uid}": { "schema": "User", "description": "User profiles." },
+    "/products/{productId}": { "schema": "Product", "description": "Product inventory." },
+    "/products/{productId}/bottles/{bottleId}": { "schema": "Bottle", "description": "Individual bottles for e-liquids." },
+    "/customers/{customerId}": { "schema": "Customer", "description": "Customer records." },
+    "/suppliers/{supplierId}": { "schema": "Supplier", "description": "Supplier records." },
+    "/purchases/{purchaseId}": { "schema": "Purchase", "description": "Purchase records." },
+    "/sales/{saleId}": { "schema": "Sale", "description": "Sales records." },
+    "/expenses/{expenseId}": { "schema": "Expense", "description": "Expense records." },
+    "/credits/{creditId}": { "schema": "Credit", "description": "Credit transactions." },
+    "/inventoryLogs/{logId}": { "schema": "InventoryLog", "description": "Inventory logs." },
+    "/settings/branding": { "schema": "Settings", "description": "Shop branding settings." }
+  }
+}
