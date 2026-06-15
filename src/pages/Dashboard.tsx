@@ -131,8 +131,10 @@ const Dashboard: React.FC = () => {
   const periodCogs = getSalesCogs(periodSales, products);
   const periodProfit = periodRevenue - periodCogs;
 
-  const periodCash = periodSales.filter(s => s.paymentMethod === 'cash').reduce((acc, s) => acc + (s.totalAmount || 0), 0);
-  const periodOnline = periodSales.filter(s => (s.paymentMethod === 'online' || s.paymentMethod === 'credit')).reduce((acc, s) => acc + (s.totalAmount || 0), 0);
+  const periodCash = periodSales.filter(s => s.paymentMethod === 'cash').reduce((acc, s) => acc + (s.totalAmount || 0), 0) + 
+                     periodSales.filter(s => s.paymentMethod === 'split').reduce((acc, s) => acc + (s.splitAmounts?.cash || 0), 0);
+  const periodOnline = periodSales.filter(s => (s.paymentMethod === 'online' || s.paymentMethod === 'credit')).reduce((acc, s) => acc + (s.totalAmount || 0), 0) + 
+                       periodSales.filter(s => s.paymentMethod === 'split').reduce((acc, s) => acc + (s.splitAmounts?.online || 0) + (s.splitAmounts?.credit || 0), 0);
   
   const periodRecoveredCredit = credits.filter(c => {
     if (c.transactionType !== 'taken') return false;

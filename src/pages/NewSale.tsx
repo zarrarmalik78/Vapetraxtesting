@@ -13,7 +13,9 @@ import {
   Droplets,
   Package,
   Receipt,
-  Check
+  Check,
+  Split,
+  UserPlus
 } from 'lucide-react';
 import { useFirestore } from '../hooks/useFirestore';
 import { formatCurrency, cn } from '../lib/utils';
@@ -36,6 +38,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { applyRefillToBottles, computeBottleStatusCounts, getAvailableMl, orderBottlesForRefill, parseBottleSizeMl, type BottleDoc } from '../lib/bottles';
 import { buildActorMeta } from '../lib/actor';
+import CustomerModal from '../components/customers/CustomerModal';
 
 interface CartItem {
   productId: string;
@@ -69,7 +72,9 @@ const NewSale: React.FC = () => {
     }
   });
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | 'credit' | 'return'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | 'credit' | 'return' | 'split'>('cash');
+  const [splitAmounts, setSplitAmounts] = useState({ cash: 0, online: 0, credit: 0 });
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('vapetrax_cart', JSON.stringify(cart));
@@ -255,6 +260,18 @@ const NewSale: React.FC = () => {
     if (paymentMethod === 'credit' && !selectedCustomerId) {
       toast.error('Customer must be selected for credit sales');
       return;
+    }
+
+    if (paymentMethod === 'split') {
+      const totalSplit = splitAmounts.cash + splitAmounts.online + splitAmounts.credit;
+      if (totalSplit !== totalAmount) {
+        toast.error(`Split amounts must equal total amount (${formatCurrency(totalAmount)}). Current split is ${formatCurrency(totalSplit)}.`);
+        return;
+      }
+      if (splitAmounts.credit > 0 && !selectedCustomerId) {
+        toast.error('Customer must be selected if split includes credit');
+        return;
+      }
     }
 
     // Guard: shopId must be resolved before any write
@@ -493,7 +510,7 @@ const NewSale: React.FC = () => {
       const totalProfit = totalAmount - totalCOGS;
 
       const saleRef = doc(collection(db, 'sales'));
-      batch.set(saleRef, {
+      const saleData: any = {
         customerId: selectedCustomerId,
         shopId,
         totalAmount,
@@ -504,12 +521,25 @@ const NewSale: React.FC = () => {
         saleDateClient: new Date(),
         items: saleItems,
         ...actorMeta
-      });
+      };
 
-      if (paymentMethod === 'credit' && selectedCustomerId) {
+      if (paymentMethod === 'split') {
+        saleData.splitAmounts = splitAmounts;
+      }
+
+      batch.set(saleRef, saleData);
+
+      let creditIncrement = 0;
+      if (paymentMethod === 'credit') {
+        creditIncrement = totalAmount;
+      } else if (paymentMethod === 'split') {
+        creditIncrement = splitAmounts.credit;
+      }
+
+      if (creditIncrement > 0 && selectedCustomerId) {
         const customerRef = doc(db, 'customers', selectedCustomerId);
         batch.update(customerRef, {
-          creditBalance: increment(totalAmount)
+          creditBalance: increment(creditIncrement)
         });
       }
 
@@ -518,6 +548,7 @@ const NewSale: React.FC = () => {
       setCart([]);
       setSelectedCustomerId(null);
       setPaymentMethod('cash');
+      setSplitAmounts({ cash: 0, online: 0, credit: 0 });
       setIsProcessing(false);
       setShowSuccessOverlay(true);
       setTimeout(() => setShowSuccessOverlay(false), 2000);
@@ -705,23 +736,23 @@ const NewSale: React.FC = () => {
       {/* Right Panel: Cart & Checkout */}
       <div className="flex flex-col bg-white border border-slate-200 rounded-[32px] overflow-hidden shadow-sm h-auto xl:h-full min-h-0 order-1 xl:order-2">
         {/* Cart Header */}
-        <div className="p-6 flex items-center justify-between border-b border-slate-100 shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-violet-50 flex items-center justify-center text-violet-600">
-              <ShoppingCart size={24} />
+        <div className="px-5 py-4 flex items-center justify-between border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center text-violet-600">
+              <ShoppingCart size={20} />
             </div>
-            <h2 className="text-xl font-bold text-slate-900">Current Order</h2>
+            <h2 className="text-lg font-bold text-slate-900">Current Order</h2>
           </div>
-          <span className="bg-violet-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">
+          <span className="bg-violet-600 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-sm">
             {cart.reduce((acc, i) => acc + i.quantity, 0)} Items
           </span>
         </div>
 
         {/* Cart Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 style-scrollbar max-h-[40vh] xl:max-h-none">
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 style-scrollbar max-h-[50vh] xl:max-h-none">
           {cart.length > 0 ? (
             cart.map((item, index) => (
-              <div key={index} className="bg-white p-4 rounded-[20px] border border-slate-100 flex flex-col gap-3 shadow-sm group hover:border-violet-200 transition-all">
+              <div key={index} className="bg-white p-3.5 rounded-2xl border border-slate-100 flex flex-col gap-2.5 shadow-sm group hover:border-violet-200 transition-all">
                 {/* Product Name - Top Row */}
                 <div className="min-w-0">
                   <p className="text-base font-bold text-slate-900 leading-tight block">{item.productName}</p>
@@ -755,9 +786,9 @@ const NewSale: React.FC = () => {
                         inputMode="decimal"
                         value={item.unitPrice}
                         onChange={(e) => updateUnitPrice(index, parseFloat(e.target.value) || 0)}
-                        className="w-[90px] text-right px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all touch-manipulation"
+                        className="w-[90px] text-right px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all touch-manipulation"
                       />
-                      <p className="text-sm font-bold text-violet-600 mt-1">{formatCurrency(item.unitPrice * item.quantity)}</p>
+                      <p className="text-sm font-bold text-violet-600 mt-0.5">{formatCurrency(item.unitPrice * item.quantity)}</p>
                     </div>
                     <button
                       onClick={() => removeFromCart(index)}
@@ -781,43 +812,157 @@ const NewSale: React.FC = () => {
         </div>
 
         {/* Checkout Section - Sticky Bottom */}
-        <div className="shrink-0 sticky bottom-0 p-4 border-t border-slate-100 space-y-4 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 z-10">
-          {/* Customer & Payment (compact) */}
-          <div className="grid grid-cols-2 gap-4">
-            <select
-              value={selectedCustomerId || ''}
-              onChange={(e) => setSelectedCustomerId(e.target.value || null)}
-              className="bg-white border border-slate-200 rounded-2xl px-4 py-3.5 text-sm text-slate-700 font-bold focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-300 transition-all shadow-sm"
-            >
-              <option value="">Walk-in Customer</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as any)}
-              className="bg-white border border-slate-200 rounded-2xl px-4 py-3.5 text-sm text-slate-700 font-bold focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-300 transition-all shadow-sm"
-            >
-              <option value="cash">💵 Cash   </option>
-              <option value="online">📱 Online  </option>
-              <option value="credit">💳 Credit  </option>
-              <option value="return">↩️ Return</option>
-            </select>
+        <div className="shrink-0 sticky bottom-0 p-3.5 border-t border-slate-100 space-y-3.5 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 z-10">
+          {/* Customer & Payment Options */}
+          <div className="flex flex-col gap-3">
+            {/* Customer Dropdown */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">
+                Customer
+              </label>
+              <div className="flex items-center bg-white border border-slate-200 rounded-2xl p-1 pr-1.5 focus-within:ring-4 focus-within:ring-violet-500/10 focus-within:border-violet-300 transition-all shadow-sm">
+                <select
+                  value={selectedCustomerId || ''}
+                  onChange={(e) => setSelectedCustomerId(e.target.value || null)}
+                  className="flex-1 bg-transparent border-0 px-3 py-2 text-sm text-slate-700 font-bold focus:outline-none focus:ring-0 cursor-pointer outline-none"
+                >
+                  <option value="">Walk-in Customer</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCustomerModal(true)}
+                  className="flex items-center justify-center p-2 bg-violet-100/60 hover:bg-violet-100 text-violet-600 rounded-xl transition-all cursor-pointer active:scale-95 shrink-0"
+                  title="Add New Customer"
+                >
+                  <UserPlus size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Payment Method Selector */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">
+                Payment Method
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {(['cash', 'online', 'credit', 'split'] as const).map(method => {
+                  const isActive = paymentMethod === method;
+                  let activeStyles = "";
+                  let inactiveIconColor = "";
+                  let activeIconColor = "";
+                  
+                  if (method === 'cash') {
+                    activeStyles = "bg-emerald-50 border-emerald-500 text-emerald-700 shadow-[0_2px_8px_-2px_rgba(16,185,129,0.25)]";
+                    activeIconColor = "text-emerald-600";
+                    inactiveIconColor = "text-emerald-500";
+                  } else if (method === 'online') {
+                    activeStyles = "bg-blue-50 border-blue-500 text-blue-700 shadow-[0_2px_8px_-2px_rgba(59,130,246,0.25)]";
+                    activeIconColor = "text-blue-600";
+                    inactiveIconColor = "text-blue-500";
+                  } else if (method === 'credit') {
+                    activeStyles = "bg-amber-50 border-amber-500 text-amber-700 shadow-[0_2px_8px_-2px_rgba(245,158,11,0.25)]";
+                    activeIconColor = "text-amber-600";
+                    inactiveIconColor = "text-amber-500";
+                  } else { // split
+                    activeStyles = "bg-violet-50 border-violet-500 text-violet-700 shadow-[0_2px_8px_-2px_rgba(139,92,246,0.25)]";
+                    activeIconColor = "text-violet-600";
+                    inactiveIconColor = "text-slate-600";
+                  }
+
+                  return (
+                    <button
+                      key={method}
+                      onClick={() => setPaymentMethod(method)}
+                      type="button"
+                      className={cn(
+                        "rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1.5 py-2.5 px-1 transition-all border-2 active:scale-95 duration-200 cursor-pointer",
+                        isActive 
+                          ? activeStyles 
+                          : "bg-white border-slate-100 text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700"
+                      )}
+                    >
+                      {method === 'cash' && <Banknote size={20} className={isActive ? activeIconColor : inactiveIconColor} />}
+                      {method === 'online' && <RefreshCw size={20} className={isActive ? activeIconColor : inactiveIconColor} />}
+                      {method === 'credit' && <CreditCard size={20} className={isActive ? activeIconColor : inactiveIconColor} />}
+                      {method === 'split' && <Split size={20} className={isActive ? activeIconColor : inactiveIconColor} />}
+                      <span className="capitalize tracking-wide">{method}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
+          {paymentMethod === 'split' && (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2.5 animate-in slide-in-from-top-2 duration-300">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Split Payment Details</h4>
+              
+              <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center"><Banknote size={16} /></div> 
+                  CASH
+                </div>
+                <input 
+                  type="number" 
+                  min="0"
+                  value={splitAmounts.cash || ''}
+                  onChange={e => setSplitAmounts(prev => ({ ...prev, cash: parseFloat(e.target.value) || 0 }))}
+                  className="w-32 text-right bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all"
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center"><RefreshCw size={16} /></div> 
+                  ONLINE
+                </div>
+                <input 
+                  type="number" 
+                  min="0"
+                  value={splitAmounts.online || ''}
+                  onChange={e => setSplitAmounts(prev => ({ ...prev, online: parseFloat(e.target.value) || 0 }))}
+                  className="w-32 text-right bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all"
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-500 flex items-center justify-center"><CreditCard size={16} /></div> 
+                  CREDIT
+                </div>
+                <input 
+                  type="number" 
+                  min="0"
+                  value={splitAmounts.credit || ''}
+                  onChange={e => setSplitAmounts(prev => ({ ...prev, credit: parseFloat(e.target.value) || 0 }))}
+                  className="w-32 text-right bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all"
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="flex justify-between items-center pt-3 pb-1 border-t border-slate-200 mt-2">
+                <span className="text-xs font-bold text-slate-500 uppercase">Total Split</span>
+                <span className={cn(
+                  "font-black text-lg tracking-tight",
+                  (splitAmounts.cash + splitAmounts.online + splitAmounts.credit) === totalAmount 
+                    ? "text-emerald-600" 
+                    : "text-rose-500"
+                )}>
+                  {formatCurrency(splitAmounts.cash + splitAmounts.online + splitAmounts.credit)}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Totals */}
-          <div className="space-y-3 pt-4 border-t border-slate-100">
-            <div className="flex justify-between items-center text-base">
-              <span className="text-slate-500 font-medium">Subtotal</span>
-              <span className="text-slate-900 font-bold">{formatCurrency(subtotal)}</span>
-            </div>
-            <div className="flex justify-between items-center text-base">
-              <span className="text-slate-500 font-medium">Tax (0%)</span>
-              <span className="text-slate-900 font-bold">{formatCurrency(tax)}</span>
-            </div>
-            <div className="flex justify-between items-end pt-4 mt-2 border-t border-slate-100">
-              <span className="text-2xl font-black text-slate-900 mb-[2px]">Total</span>
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex justify-between items-end">
+              <span className="text-xl font-black text-slate-900 mb-[2px]">Total</span>
               <span className="text-[32px] leading-none font-black text-violet-600 tracking-tight">{formatCurrency(totalAmount)}</span>
             </div>
           </div>
@@ -826,7 +971,7 @@ const NewSale: React.FC = () => {
           <button
             onClick={handleCompleteSale}
             disabled={isProcessing || cart.length === 0}
-            className="w-full h-16 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-[20px] shadow-[0_8px_20px_-6px_rgba(139,92,246,0.5)] hover:shadow-[0_12px_24px_-8px_rgba(139,92,246,0.6)] focus:ring-4 focus:ring-violet-500/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-3 text-lg"
+            className="w-full h-14 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-[20px] shadow-[0_8px_20px_-6px_rgba(139,92,246,0.5)] hover:shadow-[0_12px_24px_-8px_rgba(139,92,246,0.6)] focus:ring-4 focus:ring-violet-500/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-3 text-lg"
           >
             {isProcessing ? (
               <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -934,6 +1079,14 @@ const NewSale: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {showAddCustomerModal && (
+        <CustomerModal
+          onClose={() => setShowAddCustomerModal(false)}
+          onSuccess={(newCustomerId) => {
+            setSelectedCustomerId(newCustomerId);
+          }}
+        />
       )}
     </div>
   );

@@ -69,8 +69,7 @@ const Sidebar: React.FC = () => {
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
     { name: 'Products', path: '/stock', icon: Package, roles: ['admin', 'cashier'] },
     { name: 'Expenses', path: '/expenses', icon: DollarSign, roles: ['admin', 'cashier'] },
-    { name: 'Customers', path: '/customers', icon: Users, roles: ['admin', 'cashier'] },
-    { name: 'Credits History', path: '/credits', icon: CreditCard, roles: ['admin'] },
+    { name: 'Credit / Customers', path: '/customers', icon: Users, roles: ['admin', 'cashier'] },
     { name: 'Inventory Logs', path: '/inventory-logs', icon: ClipboardList, roles: ['admin', 'cashier'] },
   ];
 

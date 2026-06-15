@@ -17,8 +17,6 @@ import Stock from './pages/Stock';
 import NewSale from './pages/NewSale';
 import Sales from './pages/Sales';
 import Customers from './pages/Customers';
-import Credits from './pages/Credits';
-
 
 import Expenses from './pages/Expenses';
 import PersonalExpenses from './pages/PersonalExpenses';
@@ -98,11 +96,6 @@ function App() {
               </ProtectedRoute>
             } />
             
-            <Route path="/credits" element={
-              <ProtectedRoute requiredRole="admin">
-                <Layout><Credits /></Layout>
-              </ProtectedRoute>
-            } />
             
             <Route path="/expenses" element={
               <ProtectedRoute>

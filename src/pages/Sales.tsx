@@ -17,7 +17,8 @@ import {
   Printer,
   TrendingUp,
   RotateCcw,
-  ShoppingCart
+  ShoppingCart,
+  Split
 } from 'lucide-react';
 import { useFirestore, useDocument } from '../hooks/useFirestore';
 import { formatCurrency, cn } from '../lib/utils';
@@ -142,11 +143,18 @@ const Sales: React.FC = () => {
     }
 
     // Reverse credit if applicable
-    if (sale.paymentMethod === 'credit' && sale.customerId) {
+    let creditToReverse = 0;
+    if (sale.paymentMethod === 'credit') {
+      creditToReverse = sale.totalAmount;
+    } else if (sale.paymentMethod === 'split') {
+      creditToReverse = sale.splitAmounts?.credit || 0;
+    }
+
+    if (creditToReverse > 0 && sale.customerId) {
       const customerRef = doc(db, 'customers', sale.customerId);
       const customerSnap = await getDoc(customerRef);
       if (customerSnap.exists()) {
-        batch.update(customerRef, { creditBalance: increment(-sale.totalAmount) });
+        batch.update(customerRef, { creditBalance: increment(-creditToReverse) });
       }
     }
 
@@ -182,6 +190,11 @@ const Sales: React.FC = () => {
           toast.error('Failed to delete sale');
         }
       }
+      return;
+    }
+
+    if (sale.paymentMethod === 'split') {
+      toast.error('Cannot remove individual items from a split payment sale. Please delete the entire sale.');
       return;
     }
 
@@ -418,6 +431,7 @@ const Sales: React.FC = () => {
             <option value="cash">Cash</option>
             <option value="online">Online</option>
             <option value="credit">Credit</option>
+            <option value="split">Split</option>
             <option value="return">Return</option>
           </select>
 
@@ -481,11 +495,13 @@ const Sales: React.FC = () => {
                         sale.paymentMethod === 'cash' ? "bg-violet-100 text-violet-600" :
                         sale.paymentMethod === 'online' ? "bg-blue-100 text-blue-600" :
                         sale.paymentMethod === 'credit' ? "bg-amber-100 text-amber-600" :
+                        sale.paymentMethod === 'split' ? "bg-teal-100 text-teal-600" :
                         "bg-rose-100 text-rose-600"
                       )}>
                         {sale.paymentMethod === 'cash' && <Banknote size={12} />}
                         {sale.paymentMethod === 'online' && <RefreshCw size={12} />}
                         {sale.paymentMethod === 'credit' && <CreditCard size={12} />}
+                        {sale.paymentMethod === 'split' && <Split size={12} />}
                         {sale.paymentMethod}
                       </span>
                     </td>
