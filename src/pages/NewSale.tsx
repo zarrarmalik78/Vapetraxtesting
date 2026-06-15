@@ -552,7 +552,7 @@ const NewSale: React.FC = () => {
       setSplitAmounts({ cash: 0, online: 0, credit: 0 });
       setIsProcessing(false);
       setShowSuccessOverlay(true);
-      setTimeout(() => setShowSuccessOverlay(false), 2000);
+      setTimeout(() => setShowSuccessOverlay(false), 1200);
 
       void pendingCommit.catch((error: any) => {
         console.error('Sale background sync error:', error);
@@ -572,14 +572,14 @@ const NewSale: React.FC = () => {
   return (
     <div className="flex flex-col xl:grid xl:grid-cols-[1fr_380px] gap-6 w-full h-auto xl:h-[calc(100vh-112px)] xl:min-h-[700px] animate-in fade-in duration-500 pb-2">
       {showSuccessOverlay && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-[32px] p-12 flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in-75 duration-300 transform">
-            <div className="w-28 h-28 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center animate-bounce shadow-inner shadow-emerald-500/20">
-              <Check size={56} strokeWidth={4} />
+        <div className="fixed bottom-6 right-6 z-[200] pointer-events-none animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="bg-white border border-slate-100 rounded-[20px] p-5 flex items-center gap-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] pointer-events-auto max-w-sm">
+            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shrink-0 shadow-inner shadow-emerald-500/10">
+              <Check size={24} strokeWidth={3} />
             </div>
-            <div className="text-center">
-              <h2 className="text-4xl font-black text-slate-900 tracking-tight mb-3">Sale Completed!</h2>
-              <p className="text-slate-500 font-medium text-lg">Your cart has been cleared.</p>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 tracking-tight">Sale Completed!</h2>
+              <p className="text-slate-400 font-medium text-xs">Your cart has been cleared.</p>
             </div>
           </div>
         </div>
