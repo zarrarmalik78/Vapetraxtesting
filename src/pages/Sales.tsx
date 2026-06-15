@@ -59,11 +59,14 @@ const Sales: React.FC = () => {
     return sales.filter(s => {
       const customer = customers.find(c => c.id === s.customerId);
       const customerName = customer?.name || 'Walk-in';
-      return (
-        (customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-         s.id?.toLowerCase().includes(searchTerm.toLowerCase())) &&
-        (paymentFilter === 'all' || s.paymentMethod === paymentFilter)
-      );
+      const searchLower = searchTerm.toLowerCase();
+      
+      const matchesSearch = 
+        customerName.toLowerCase().includes(searchLower) || 
+        s.id?.toLowerCase().includes(searchLower) ||
+        s.items?.some((item: any) => item.productName?.toLowerCase().includes(searchLower));
+
+      return matchesSearch && (paymentFilter === 'all' || s.paymentMethod === paymentFilter);
     });
   }, [sales, customers, searchTerm, paymentFilter]);
 

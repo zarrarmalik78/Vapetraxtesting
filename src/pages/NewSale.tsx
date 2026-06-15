@@ -83,6 +83,7 @@ const NewSale: React.FC = () => {
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [showRefillModal, setShowRefillModal] = useState<{ product: any } | null>(null);
   const [refillAmount, setRefillAmount] = useState<number>(3.0);
+  const [customRefillPrice, setCustomRefillPrice] = useState<number | ''>('');
   const [refillModalBottles, setRefillModalBottles] = useState<BottleDoc[] | null>(null);
   const REFILL_PRICE_PER_ML = 100;
   const actorMeta = useMemo(() => buildActorMeta({ currentUser, userRole }), [currentUser, userRole]);
@@ -135,7 +136,7 @@ const NewSale: React.FC = () => {
     }, 0);
   };
 
-  const addToCart = (product: any, type: 'regular' | 'refill' | 'full_bottle', amount?: number) => {
+  const addToCart = (product: any, type: 'regular' | 'refill' | 'full_bottle', amount?: number, customPrice?: number) => {
     if (product.stockQuantity <= 0) {
       toast.error('Product is out of stock');
       return;
@@ -179,7 +180,7 @@ const NewSale: React.FC = () => {
         productName: product.name,
         category: product.category,
         // Refill pricing: use product.pricePerMl if available, otherwise fallback to REFILL_PRICE_PER_ML
-        unitPrice: type === 'refill' ? refillMl * (Number(product.pricePerMl) || REFILL_PRICE_PER_ML) : product.sellingPrice,
+        unitPrice: customPrice !== undefined ? customPrice : (type === 'refill' ? refillMl * (Number(product.pricePerMl) || REFILL_PRICE_PER_ML) : product.sellingPrice),
         quantity: 1,
         saleType: type,
         refillAmount: type === 'refill' ? refillMl : undefined,
@@ -666,6 +667,7 @@ const NewSale: React.FC = () => {
                         onClick={async () => {
                           setRefillModalBottles(null);
                           setRefillAmount(3);
+                          setCustomRefillPrice('');
                           setShowRefillModal({ product });
                           try {
                             if (!shopId) return;
@@ -1035,7 +1037,10 @@ const NewSale: React.FC = () => {
                   {[1, 2, 3].map((val) => (
                     <button
                       key={val}
-                      onClick={() => setRefillAmount(val)}
+                      onClick={() => {
+                        setRefillAmount(val);
+                        setCustomRefillPrice('');
+                      }}
                       className={cn(
                         "py-5 rounded-[20px] border-2 text-xl font-black transition-all focus:outline-none focus:border-violet-400",
                         refillAmount === val
@@ -1053,7 +1058,10 @@ const NewSale: React.FC = () => {
                     min={0.1}
                     step={0.1}
                     value={refillAmount}
-                    onChange={(e) => setRefillAmount(Math.max(0.1, parseFloat(e.target.value) || 0.1))}
+                    onChange={(e) => {
+                      setRefillAmount(Math.max(0.1, parseFloat(e.target.value) || 0.1));
+                      setCustomRefillPrice('');
+                    }}
                     className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-300 transition-all shadow-sm"
                     placeholder="Enter custom ml (e.g. 3)"
                   />
@@ -1062,14 +1070,24 @@ const NewSale: React.FC = () => {
 
               <div className="p-5 bg-violet-50/50 rounded-2xl border border-violet-100 flex justify-between items-center">
                 <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">Total Price</span>
-                <span className="text-3xl font-black text-violet-600">
-                  {formatCurrency(refillAmount * (Number(showRefillModal.product.pricePerMl) || REFILL_PRICE_PER_ML))}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-bold text-violet-400">Rs</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={customRefillPrice === '' ? (refillAmount * (Number(showRefillModal.product.pricePerMl) || REFILL_PRICE_PER_ML)) : customRefillPrice}
+                    onChange={(e) => setCustomRefillPrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    className="w-24 text-right px-3 py-2 bg-white border border-violet-200 rounded-xl text-violet-600 text-2xl font-black focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all"
+                  />
+                </div>
               </div>
 
               <button
                 onClick={() => {
-                  addToCart(showRefillModal.product, 'refill', refillAmount);
+                  const finalPrice = customRefillPrice === '' 
+                    ? (refillAmount * (Number(showRefillModal.product.pricePerMl) || REFILL_PRICE_PER_ML)) 
+                    : customRefillPrice;
+                  addToCart(showRefillModal.product, 'refill', refillAmount, finalPrice);
                   setShowRefillModal(null);
                 }}
                 className="w-full h-16 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-[20px] shadow-[0_8px_20px_-6px_rgba(139,92,246,0.5)] transition-all active:scale-[0.98] text-lg focus:ring-4 focus:ring-violet-500/30 outline-none"

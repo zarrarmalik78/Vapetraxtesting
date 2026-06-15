@@ -165,18 +165,7 @@ const Login: React.FC = () => {
 
           {/* View Toggle */}
           <div className="mt-6 text-center">
-            {view === 'login' ? (
-              <p className="text-sm text-slate-500">
-                Don't have an account?{' '}
-                <button
-                  onClick={() => setView('signup')}
-                  disabled={isBusy}
-                  className="font-medium text-violet-600 hover:text-violet-700 focus:outline-none ml-1"
-                >
-                  Sign up
-                </button>
-              </p>
-            ) : (
+            {view !== 'login' && (
               <p className="text-sm text-slate-500">
                 <button
                   onClick={() => setView('login')}
@@ -189,31 +178,7 @@ const Login: React.FC = () => {
             )}
           </div>
 
-          {/* Social Auth Separator */}
-          {view === 'login' && (
-            <div className="mt-8">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-3 bg-white text-slate-500">Or continue with</span>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <button
-                  type="button"
-                  onClick={handleGoogleLogin}
-                  disabled={isBusy}
-                  className="w-full flex items-center justify-center gap-3 px-4 py-2.5 bg-white border border-slate-300 rounded-lg shadow-sm text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-                  Google
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Social Auth hidden per request */}
         </div>
 
         {/* Feature Highlights (Signup Only) */}
