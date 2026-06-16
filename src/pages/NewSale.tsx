@@ -39,6 +39,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { applyRefillToBottles, computeBottleStatusCounts, getAvailableMl, orderBottlesForRefill, parseBottleSizeMl, type BottleDoc } from '../lib/bottles';
 import { buildActorMeta } from '../lib/actor';
 import CustomerModal from '../components/customers/CustomerModal';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { reverseSaleImpact } from '../lib/salesReversal';
 
 interface CartItem {
   productId: string;
@@ -53,6 +55,12 @@ interface CartItem {
 
 const NewSale: React.FC = () => {
   const { currentUser, shopId, userRole } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const editSale = location.state?.editSale;
+  const isEditing = !!editSale;
+
   const { documents: products, loading: productsLoading } = useFirestore<any>(
     shopId ? 'products' : null,
     where('shopId', '==', shopId)
@@ -64,6 +72,18 @@ const NewSale: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState<CartItem[]>(() => {
+    if (editSale?.items) {
+      return editSale.items.map((item: any) => ({
+        productId: item.productId,
+        productName: item.productName,
+        category: item.category || 'unknown',
+        unitPrice: item.unitPrice,
+        quantity: item.quantity,
+        saleType: item.saleType,
+        refillAmount: item.refillAmount || undefined,
+        bottleSize: item.bottleSize || undefined
+      }));
+    }
     try {
       const saved = localStorage.getItem('vapetrax_cart');
       return saved ? JSON.parse(saved) : [];
@@ -71,10 +91,11 @@ const NewSale: React.FC = () => {
       return [];
     }
   });
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | 'credit' | 'return' | 'split'>('cash');
-  const [splitAmounts, setSplitAmounts] = useState({ cash: 0, online: 0, credit: 0 });
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(editSale?.customerId || null);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | 'credit' | 'return' | 'split'>(editSale?.paymentMethod || 'cash');
+  const [splitAmounts, setSplitAmounts] = useState(editSale?.splitAmounts || { cash: 0, online: 0, credit: 0 });
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [saleDateOverride, setSaleDateOverride] = useState<string>('');
 
   useEffect(() => {
     localStorage.setItem('vapetrax_cart', JSON.stringify(cart));
@@ -282,9 +303,16 @@ const NewSale: React.FC = () => {
     }
 
     setIsProcessing(true);
-    const batch = writeBatch(db);
 
     try {
+      if (isEditing) {
+        const reverseBatch = writeBatch(db);
+        await reverseSaleImpact(editSale, shopId, actorMeta, reverseBatch, true);
+        reverseBatch.delete(doc(db, 'sales', editSale.id));
+        await reverseBatch.commit();
+      }
+
+      const batch = writeBatch(db);
       const saleItems = [];
 
       for (const item of cart) {
@@ -510,7 +538,28 @@ const NewSale: React.FC = () => {
       const totalCOGS = saleItems.reduce((acc, item) => acc + (item.totalCost || 0), 0);
       const totalProfit = totalAmount - totalCOGS;
 
-      const saleRef = doc(collection(db, 'sales'));
+      let finalSaleDate: any = serverTimestamp();
+      let finalSaleDateClient = new Date();
+
+      const extractDate = (val: any): Date => {
+        if (!val) return new Date();
+        if (typeof val.toDate === 'function') return val.toDate();
+        if (val.seconds !== undefined) return new Date(val.seconds * 1000);
+        return new Date(val);
+      };
+
+      if (isEditing) {
+        finalSaleDate = extractDate(editSale.saleDate);
+        finalSaleDateClient = extractDate(editSale.saleDateClient);
+      } else if (saleDateOverride) {
+        const d = new Date();
+        const [y, m, day] = saleDateOverride.split('-').map(Number);
+        d.setFullYear(y, m - 1, day);
+        finalSaleDateClient = d;
+        finalSaleDate = d;
+      }
+
+      const saleRef = isEditing ? doc(db, 'sales', editSale.id) : doc(collection(db, 'sales'));
       const saleData: any = {
         customerId: selectedCustomerId,
         shopId,
@@ -518,11 +567,15 @@ const NewSale: React.FC = () => {
         totalCOGS,
         totalProfit,
         paymentMethod,
-        saleDate: serverTimestamp(),
-        saleDateClient: new Date(),
+        saleDate: finalSaleDate,
+        saleDateClient: finalSaleDateClient,
         items: saleItems,
         ...actorMeta
       };
+      
+      if (isEditing) {
+        saleData.updatedAt = serverTimestamp();
+      }
 
       if (paymentMethod === 'split') {
         saleData.splitAmounts = splitAmounts;
@@ -550,9 +603,15 @@ const NewSale: React.FC = () => {
       setSelectedCustomerId(null);
       setPaymentMethod('cash');
       setSplitAmounts({ cash: 0, online: 0, credit: 0 });
+      setSaleDateOverride('');
       setIsProcessing(false);
       setShowSuccessOverlay(true);
-      setTimeout(() => setShowSuccessOverlay(false), 1200);
+      setTimeout(() => {
+        setShowSuccessOverlay(false);
+        if (isEditing) {
+          navigate('/sales');
+        }
+      }, 1200);
 
       void pendingCommit.catch((error: any) => {
         console.error('Sale background sync error:', error);
@@ -588,8 +647,12 @@ const NewSale: React.FC = () => {
       <div className="flex flex-col gap-6 min-w-0 xl:h-full overflow-visible xl:overflow-hidden order-2 xl:order-1">
         {/* Header */}
         <div className="shrink-0 pl-14 md:pl-0">
-          <h1 className="text-[32px] font-extrabold text-slate-900 tracking-tight">Billing</h1>
-          <p className="text-slate-400 mt-1 text-base">Select products to generate a new bill.</p>
+          <h1 className="text-[32px] font-extrabold text-slate-900 tracking-tight">
+            {isEditing ? 'Edit Bill' : 'Billing'}
+          </h1>
+          <p className="text-slate-400 mt-1 text-base">
+            {isEditing ? `Modifying Sale #${editSale.id.slice(-6).toUpperCase()}` : 'Select products to generate a new bill.'}
+          </p>
         </div>
 
         {/* Search Bar */}
@@ -844,6 +907,33 @@ const NewSale: React.FC = () => {
               </div>
             </div>
 
+            {/* Sale Date Override */}
+            {!isEditing && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">
+                  Sale Date (Optional)
+                </label>
+                <div className="flex items-center bg-white border border-slate-200 rounded-2xl p-1 focus-within:ring-4 focus-within:ring-violet-500/10 focus-within:border-violet-300 transition-all shadow-sm">
+                  <input
+                    type="date"
+                    value={saleDateOverride}
+                    max={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => setSaleDateOverride(e.target.value)}
+                    className="flex-1 bg-transparent border-0 px-3 py-2 text-sm text-slate-700 font-bold focus:outline-none focus:ring-0 cursor-pointer outline-none w-full"
+                  />
+                  {saleDateOverride && (
+                    <button
+                      type="button"
+                      onClick={() => setSaleDateOverride('')}
+                      className="p-2 text-slate-400 hover:text-rose-500 rounded-xl transition-all"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Payment Method Selector */}
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">
@@ -980,7 +1070,7 @@ const NewSale: React.FC = () => {
             ) : (
               <>
                 <Receipt size={24} />
-                Generate Bill
+                {isEditing ? 'Update Bill' : 'Generate Bill'}
               </>
             )}
           </button>

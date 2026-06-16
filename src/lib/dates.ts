@@ -10,6 +10,10 @@ function normalizeDate(value: any): Date | null {
     const d = value.toDate();
     return isValidDate(d) ? d : null;
   }
+  if (value.seconds !== undefined && typeof value.seconds === 'number') {
+    const d = new Date(value.seconds * 1000);
+    return isValidDate(d) ? d : null;
+  }
   const d = new Date(value);
   return isValidDate(d) ? d : null;
 }

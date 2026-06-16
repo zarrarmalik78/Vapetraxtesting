@@ -18,8 +18,11 @@ import {
   TrendingUp,
   RotateCcw,
   ShoppingCart,
-  Split
+  Split,
+  Edit
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { deleteSaleWithReversal, reverseSaleImpact } from '../lib/salesReversal';
 import { useFirestore, useDocument } from '../hooks/useFirestore';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
@@ -35,6 +38,7 @@ import { reauthenticateForSensitiveAction, requiresPasswordReauth } from '../lib
 
 const Sales: React.FC = () => {
   const { shopId, currentUser, userRole } = useAuth();
+  const navigate = useNavigate();
   const { documents: sales, loading } = useFirestore<any>(
     shopId ? 'sales' : null, 
     where('shopId', '==', shopId),
@@ -56,7 +60,7 @@ const Sales: React.FC = () => {
   const actorMeta = useMemo(() => buildActorMeta({ currentUser, userRole }), [currentUser, userRole]);
 
   const filteredSales = useMemo(() => {
-    return sales.filter(s => {
+    const filtered = sales.filter(s => {
       const customer = customers.find(c => c.id === s.customerId);
       const customerName = customer?.name || 'Walk-in';
       const searchLower = searchTerm.toLowerCase();
@@ -68,107 +72,18 @@ const Sales: React.FC = () => {
 
       return matchesSearch && (paymentFilter === 'all' || s.paymentMethod === paymentFilter);
     });
+
+    return filtered.sort((a, b) => {
+      const dateA = toDisplayDate(a.saleDate, a.saleDateClient) || new Date(0);
+      const dateB = toDisplayDate(b.saleDate, b.saleDateClient) || new Date(0);
+      return dateB.getTime() - dateA.getTime();
+    });
   }, [sales, customers, searchTerm, paymentFilter]);
-
-  const deleteSaleWithReversal = async (sale: any) => {
-    if (!shopId) throw new Error('Shop not loaded');
-    const batch = writeBatch(db);
-
-    // Reverse inventory changes
-    for (const item of sale.items) {
-      const productRef = doc(db, 'products', item.productId);
-      const productSnap = await getDoc(productRef);
-
-      const isELiquidLine = item.saleType === 'refill' || item.saleType === 'full_bottle';
-      if (isELiquidLine) {
-        const bottleSizeMl = parseBottleSizeMl(item.bottleSize, 30);
-        const mlToRestore =
-          item.saleType === 'refill'
-            ? (Number(item.refillAmount) || 0) * (Number(item.quantity) || 0)
-            : bottleSizeMl * (Number(item.quantity) || 0);
-
-        if (mlToRestore > 0 && productSnap.exists()) {
-          batch.update(productRef, { stockQuantity: increment(mlToRestore) });
-        }
-
-        const bottleChanges: any[] = Array.isArray(item.bottleChanges) ? item.bottleChanges : [];
-        for (const bc of bottleChanges) {
-          if (!bc?.bottleId) continue;
-          const bottleRef = doc(db, `products/${item.productId}/bottles`, bc.bottleId);
-          const bottleSnap = await getDoc(bottleRef);
-          if (bottleSnap.exists()) {
-            batch.update(bottleRef, {
-              remainingMl: Number(bc.beforeRemainingMl) || 0,
-              status: bc.beforeStatus || 'closed',
-              openedDate: bc.beforeOpenedDate || null,
-              updatedAt: serverTimestamp()
-            });
-          }
-        }
-
-        const logRef = doc(collection(db, 'inventoryLogs'));
-        batch.set(logRef, {
-          productId: item.productId,
-          productName: item.productName || 'Unknown Product',
-          shopId,
-          action: 'return',
-          type: 'return',
-          mlChange: mlToRestore,
-          change: mlToRestore,
-          quantityChange: item.saleType === 'full_bottle' ? Number(item.quantity) || 0 : 0,
-          reason: `Sale deleted (restored): ${(sale.id ? sale.id.slice(-6).toUpperCase() : '') || sale.id}`,
-          notes: productSnap.exists() ? `Inventory restored from deleted sale` : `Sale deleted, but product was missing`,
-          ...actorMeta,
-          createdAt: serverTimestamp(),
-          createdAtClient: new Date()
-        });
-      } else {
-        if (productSnap.exists()) {
-          batch.update(productRef, { stockQuantity: increment(item.quantity) });
-        }
-
-        const logRef = doc(collection(db, 'inventoryLogs'));
-        batch.set(logRef, {
-          productId: item.productId,
-          productName: item.productName || 'Unknown Product',
-          shopId,
-          action: 'return',
-          type: 'return',
-          change: Number(item.quantity) || 0,
-          quantityChange: item.quantity,
-          reason: `Sale deleted (restored): ${(sale.id ? sale.id.slice(-6).toUpperCase() : '') || sale.id}`,
-          notes: productSnap.exists() ? `Inventory restored from deleted sale` : `Sale deleted, but product was missing`,
-          ...actorMeta,
-          createdAt: serverTimestamp(),
-          createdAtClient: new Date()
-        });
-      }
-    }
-
-    // Reverse credit if applicable
-    let creditToReverse = 0;
-    if (sale.paymentMethod === 'credit') {
-      creditToReverse = sale.totalAmount;
-    } else if (sale.paymentMethod === 'split') {
-      creditToReverse = sale.splitAmounts?.credit || 0;
-    }
-
-    if (creditToReverse > 0 && sale.customerId) {
-      const customerRef = doc(db, 'customers', sale.customerId);
-      const customerSnap = await getDoc(customerRef);
-      if (customerSnap.exists()) {
-        batch.update(customerRef, { creditBalance: increment(-creditToReverse) });
-      }
-    }
-
-    batch.delete(doc(db, 'sales', sale.id));
-    await batch.commit();
-  };
 
   const handleDelete = async (sale: any) => {
     if (window.confirm('Are you sure you want to delete this sale? This will reverse all inventory and credit changes.')) {
       try {
-        await deleteSaleWithReversal(sale);
+        await deleteSaleWithReversal(sale, shopId, actorMeta);
         toast.success('Sale deleted and inventory restored');
       } catch (error) {
         console.error(error);
@@ -183,7 +98,7 @@ const Sales: React.FC = () => {
       // Removing the only item deletes the sale entirely
       if (window.confirm('This is the last item in the sale. Removing it will delete the entire sale. Continue?')) {
         try {
-          await deleteSaleWithReversal(sale);
+          await deleteSaleWithReversal(sale, shopId, actorMeta);
           toast.success('Sale deleted and inventory restored');
           if (showInvoiceModal?.id === sale.id) {
             setShowInvoiceModal(null);
@@ -335,7 +250,7 @@ const Sales: React.FC = () => {
         await reauthenticateForSensitiveAction(currentUser, deletePassword);
       }
       const selectedSales = sales.filter((s) => selectedIds.includes(s.id));
-      for (const sale of selectedSales) await deleteSaleWithReversal(sale);
+      for (const sale of selectedSales) await deleteSaleWithReversal(sale, shopId, actorMeta);
       toast.success(`Deleted ${selectedSales.length} sale(s) with inventory reversal`);
       setSelectedIds([]);
       setShowBulkDeleteModal(false);
@@ -474,10 +389,33 @@ const Sales: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredSales.map((sale) => {
+              {filteredSales.map((sale, index) => {
                 const customer = customers.find(c => c.id === sale.customerId);
+                const currentSaleDate = toDisplayDate(sale.saleDate, sale.saleDateClient) || new Date();
+                const currentDateStr = currentSaleDate.toLocaleDateString();
+                
+                let showDaySeparator = false;
+                if (index > 0) {
+                  const prevSale = filteredSales[index - 1];
+                  const prevSaleDate = toDisplayDate(prevSale.saleDate, prevSale.saleDateClient) || new Date();
+                  if (currentDateStr !== prevSaleDate.toLocaleDateString()) {
+                    showDaySeparator = true;
+                  }
+                }
+                
                 return (
-                  <tr key={sale.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <React.Fragment key={sale.id}>
+                    {showDaySeparator && (
+                      <tr>
+                        <td colSpan={userRole === 'admin' ? 8 : 7} className="px-6 py-3 bg-slate-100/50 border-y border-slate-200/60">
+                          <div className="flex items-center gap-2">
+                            <Calendar size={14} className="text-violet-500" />
+                            <span className="text-xs font-bold text-slate-700 uppercase tracking-widest">{currentDateStr}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    <tr className="hover:bg-slate-50/50 transition-colors group">
                     <td className="px-6 py-4">
                       <span className="text-[10px] font-bold font-mono text-slate-400 group-hover:text-violet-600 transition-colors">
                         #{sale.id?.slice(-6).toUpperCase()}
@@ -509,9 +447,15 @@ const Sales: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 text-slate-500 font-medium text-sm">
-                        <Clock size={14} className="text-slate-400" />
-                        {(toDisplayDate(sale.saleDate, sale.saleDateClient) || new Date()).toLocaleDateString()}
+                      <div className="flex flex-col gap-1 text-slate-500 font-medium text-sm">
+                        <div className="flex items-center gap-2">
+                          <Calendar size={14} className="text-slate-400" />
+                          <span>{currentDateStr}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-400">
+                          <Clock size={12} className="text-slate-300" />
+                          <span>{currentSaleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -544,17 +488,27 @@ const Sales: React.FC = () => {
                           <FileText size={18} />
                         </button>
                         {userRole === 'admin' && (
-                          <button 
-                            onClick={() => handleDelete(sale)}
-                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" 
-                            title="Delete Sale"
-                          >
-                            <Trash2 size={18} />
-                          </button>
+                          <>
+                            <button 
+                              onClick={() => navigate('/sales/new', { state: { editSale: sale } })}
+                              className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" 
+                              title="Edit Sale"
+                            >
+                              <Edit size={18} />
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(sale)}
+                              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" 
+                              title="Delete Sale"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>
                   </tr>
+                  </React.Fragment>
                 );
               })}
             </tbody>
