@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import toast from 'react-hot-toast';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -22,7 +23,8 @@ import {
   Plus,
   Moon,
   Sun,
-  Home
+  Home,
+  Landmark
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useConnectivity } from '../../hooks/useConnectivity';
@@ -48,6 +50,41 @@ const Sidebar: React.FC = () => {
       localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
+
+  const hasCheckedBackup = useRef(false);
+
+  useEffect(() => {
+    if (hasCheckedBackup.current) return;
+    if (settings !== undefined && userRole === 'admin') {
+      let needsBackup = false;
+      if (!settings?.lastBackupDate) {
+        needsBackup = true;
+      } else {
+        const lastBackup = settings.lastBackupDate?.toDate 
+          ? settings.lastBackupDate.toDate() 
+          : new Date(settings.lastBackupDate.seconds ? settings.lastBackupDate.seconds * 1000 : settings.lastBackupDate);
+          
+        if (!isNaN(lastBackup.getTime())) {
+          const daysSince = (Date.now() - lastBackup.getTime()) / (1000 * 60 * 60 * 24);
+          if (daysSince >= 7) needsBackup = true;
+        }
+      }
+      
+      if (needsBackup) {
+        // Backup reminder disabled for now (paused database backup dev)
+        /*
+        toast('It has been over a week since your last backup! Please download a new JSON backup from the Settings page.', {
+          icon: '⚠️',
+          duration: 10000,
+          id: 'backup-warning'
+        });
+        */
+        hasCheckedBackup.current = true;
+      } else if (settings?.lastBackupDate) {
+        hasCheckedBackup.current = true;
+      }
+    }
+  }, [settings, userRole]);
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -78,6 +115,7 @@ const Sidebar: React.FC = () => {
     { name: 'Personal Expenses', path: '/personal-expenses', icon: Home, roles: ['admin'] },
     { name: 'Analytics', path: '/analytics', icon: BarChart3, roles: ['admin'] },
     { name: 'Detailed Reports', path: '/reports/detailed', icon: FileText, roles: ['admin'] },
+    { name: 'Accounting', path: '/finance', icon: Landmark, roles: ['admin'] },
   ];
 
   const filteredTopNav = topNavItems.filter(item => item.roles.includes(userRole || ''));

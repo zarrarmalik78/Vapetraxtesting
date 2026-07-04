@@ -16,7 +16,7 @@ import { useFirestore } from '../hooks/useFirestore';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { format } from 'date-fns';
-import { orderBy as firestoreOrderBy, where } from 'firebase/firestore';
+import { orderBy as firestoreOrderBy, where, limit } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { toDisplayDate } from '../lib/dates';
 
@@ -25,7 +25,8 @@ const InventoryLogs: React.FC = () => {
   const { documents: logs, loading } = useFirestore<any>(
     shopId ? 'inventoryLogs' : null, 
     where('shopId', '==', shopId),
-    firestoreOrderBy('createdAt', 'desc')
+    firestoreOrderBy('createdAt', 'desc'),
+    limit(300)
   );
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');

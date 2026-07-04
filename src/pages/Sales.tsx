@@ -26,7 +26,7 @@ import { deleteSaleWithReversal, reverseSaleImpact } from '../lib/salesReversal'
 import { useFirestore, useDocument } from '../hooks/useFirestore';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
-import { doc, increment, collection, serverTimestamp, orderBy, where, writeBatch, getDoc } from 'firebase/firestore';
+import { doc, increment, collection, serverTimestamp, orderBy, where, writeBatch, getDoc, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -42,7 +42,8 @@ const Sales: React.FC = () => {
   const { documents: sales, loading } = useFirestore<any>(
     shopId ? 'sales' : null, 
     where('shopId', '==', shopId),
-    orderBy('saleDate', 'desc')
+    orderBy('saleDate', 'desc'),
+    limit(200)
   );
   const { documents: customers } = useFirestore<any>(
     shopId ? 'customers' : null,

@@ -154,5 +154,21 @@ service cloud.firestore {
       allow read, update, delete: if canAccessDoc() || (isAuth() && alertId.split('_')[0] == request.auth.uid);
       allow create: if canCreateDoc() || (isAuth() && request.resource.data.shopId == request.auth.uid);
     }
+
+    // ---------------------------------------------------------------
+    // Finance System
+    // ---------------------------------------------------------------
+    match /finance_accounts/{accountId} {
+      allow read:   if canAccessDoc();
+      allow create: if canCreateDoc();
+      allow update: if canAccessDoc();
+      allow delete: if canAccessDoc();
+    }
+    match /finance_transactions/{txId} {
+      allow read:   if canAccessDoc();
+      allow create: if canCreateDoc();
+      allow update: if canAccessDoc();
+      allow delete: if canAccessDoc();
+    }
   }
 }

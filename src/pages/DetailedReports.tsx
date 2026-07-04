@@ -21,10 +21,16 @@ import * as XLSX from 'xlsx';
 import { toDisplayDate } from '../lib/dates';
 import { getSalesCogs } from '../lib/finance';
 
+// Only fetch the last 90 days of transactional data to stay within Firebase quotas.
+const QUERY_WINDOW_DAYS = 90;
+const queryWindowStart = new Date();
+queryWindowStart.setDate(queryWindowStart.getDate() - QUERY_WINDOW_DAYS);
+queryWindowStart.setHours(0, 0, 0, 0);
+
 const DetailedReports: React.FC = () => {
   const { shopId } = useAuth();
-  const { documents: sales, loading: salesLoading } = useFirestore<any>(shopId ? 'sales' : null, where('shopId', '==', shopId));
-  const { documents: expenses, loading: expensesLoading } = useFirestore<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId));
+  const { documents: sales, loading: salesLoading } = useFirestore<any>(shopId ? 'sales' : null, where('shopId', '==', shopId), where('saleDateClient', '>=', queryWindowStart));
+  const { documents: expenses, loading: expensesLoading } = useFirestore<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
   const { documents: products } = useFirestore<any>(shopId ? 'products' : null, where('shopId', '==', shopId));
 
 

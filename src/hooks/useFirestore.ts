@@ -28,7 +28,6 @@ export function useFirestore<T = DocumentData>(collectionName: string | null | f
     const q = query(collection(db, collectionName), ...queryConstraints);
     const unsubscribe = onSnapshot(
       q,
-      { includeMetadataChanges: true },
       (snapshot) => {
         const docs = snapshot.docs.map((d) => ({
           id: d.id,
@@ -75,7 +74,6 @@ export function useDocument<T = DocumentData>(collectionName: string | null | fa
 
     const unsubscribe = onSnapshot(
       doc(db, collectionName, docId),
-      { includeMetadataChanges: true },
       (snapshot) => {
         if (snapshot.exists()) {
           setDocument({ id: snapshot.id, ...snapshot.data() } as T);

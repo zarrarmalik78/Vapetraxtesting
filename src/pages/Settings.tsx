@@ -33,6 +33,7 @@ import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import { BackupRestoreTab } from '../components/settings/BackupRestoreTab';
 
 const Settings: React.FC = () => {
   const { shopId, currentUser, createCashier, deleteCashier, resetPassword } = useAuth();
@@ -182,6 +183,12 @@ const Settings: React.FC = () => {
             onClick={() => setActiveTab('mobile')} 
             icon={<Smartphone size={18} />} 
             label="Mobile App" 
+          />
+          <SettingsNavButton 
+            active={activeTab === 'backup'} 
+            onClick={() => setActiveTab('backup')} 
+            icon={<Save size={18} />} 
+            label="Backup & Restore" 
           />
         </div>
 
@@ -497,6 +504,8 @@ const Settings: React.FC = () => {
               </div>
             </div>
           )}
+
+          {activeTab === 'backup' && <BackupRestoreTab />}
         </div>
       </div>
     </div>

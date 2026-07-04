@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
-import { NotificationProvider } from './contexts/NotificationContext';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import Sidebar from './components/layout/Sidebar';
 import ConnectivityBadge from './components/ui/ConnectivityBadge';
@@ -24,6 +23,7 @@ import Analytics from './pages/Analytics';
 import DetailedReports from './pages/DetailedReports';
 import InventoryLogs from './pages/InventoryLogs';
 import Settings from './pages/Settings';
+import Finance from './pages/Finance';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Run background tasks (daily summary + low stock checker) while authenticated
@@ -46,7 +46,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 function App() {
   return (
     <AuthProvider>
-      <NotificationProvider>
         <Router>
           <Toaster position="top-right" toastOptions={{
             style: {
@@ -133,10 +132,15 @@ function App() {
               </ProtectedRoute>
             } />
 
+            <Route path="/finance" element={
+              <ProtectedRoute requiredRole="admin">
+                <Layout><Finance /></Layout>
+              </ProtectedRoute>
+            } />
+
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Router>
-      </NotificationProvider>
     </AuthProvider>
   );
 }

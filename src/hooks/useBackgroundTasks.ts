@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react';
-import { collection, query, where, getDocs, setDoc, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { toDisplayDate } from '../lib/dates';
 
 const DAILY_SUMMARY_KEY = 'vapetrax_last_daily_summary';
 const LOW_STOCK_CHECK_KEY = 'vapetrax_last_stock_check';
-const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+const CHECK_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours (was 30 min — saves massive reads)
 
 function getTodayDateStr(): string {
   const d = new Date();
@@ -22,7 +22,6 @@ export function useBackgroundTasks() {
 
     const runTasks = async () => {
       await generateDailySummary(shopId);
-      await checkLowStock(shopId);
     };
 
     // Run immediately on mount
@@ -47,16 +46,19 @@ async function generateDailySummary(shopId: string) {
     const summaryDocId = `${shopId}_${todayStr}`;
     const existingRef = doc(db, 'dailySummaries', summaryDocId);
     
-    // Query today's sales
+    // Query ONLY today's sales using date filter (was fetching ALL sales!)
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
     const salesQuery = query(
       collection(db, 'sales'),
-      where('shopId', '==', shopId)
+      where('shopId', '==', shopId),
+      where('saleDateClient', '>=', todayStart)  // Server-side date filter
     );
     const salesSnap = await getDocs(salesQuery);
     
+    // These are already today's sales thanks to the server-side filter,
+    // but double-check client-side for the business-day boundary
     const todaySales = salesSnap.docs.filter(d => {
       const data = d.data();
       const saleDate = toDisplayDate(data.saleDate, data.saleDateClient);
@@ -111,50 +113,3 @@ async function generateDailySummary(shopId: string) {
   }
 }
 
-async function checkLowStock(shopId: string) {
-  try {
-    const now = Date.now();
-    const lastCheck = localStorage.getItem(LOW_STOCK_CHECK_KEY);
-    if (lastCheck && now - parseInt(lastCheck) < CHECK_INTERVAL_MS) return;
-
-    const productsQuery = query(
-      collection(db, 'products'),
-      where('shopId', '==', shopId)
-    );
-    const productsSnap = await getDocs(productsQuery);
-
-    for (const productDoc of productsSnap.docs) {
-      const data = productDoc.data();
-      const stock = data.stockQuantity ?? 0;
-      const minLevel = data.minStockLevel ?? 0;
-      const alertDocId = `${shopId}_${productDoc.id}`;
-
-      if (minLevel > 0 && stock <= minLevel) {
-        // Create or update an active alert
-        await setDoc(doc(db, 'stockAlerts', alertDocId), {
-          shopId,
-          productId: productDoc.id,
-          productName: data.name || 'Unknown Product',
-          currentStock: stock,
-          minStockLevel: minLevel,
-          status: 'active',
-          updatedAt: serverTimestamp(),
-          createdAt: serverTimestamp(),
-        }, { merge: true });
-      } else {
-        // Resolve alert if stock is back above minimum
-        // We use merge so it only updates if the doc exists
-        await setDoc(doc(db, 'stockAlerts', alertDocId), {
-          shopId,
-          status: 'resolved',
-          currentStock: stock,
-          updatedAt: serverTimestamp(),
-        }, { merge: true });
-      }
-    }
-
-    localStorage.setItem(LOW_STOCK_CHECK_KEY, String(now));
-  } catch (error) {
-    console.warn('Low stock check failed (may be offline):', error);
-  }
-}
