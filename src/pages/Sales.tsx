@@ -24,6 +24,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { deleteSaleWithReversal, reverseSaleImpact } from '../lib/salesReversal';
 import { useFirestore, useDocument } from '../hooks/useFirestore';
+import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { doc, increment, collection, serverTimestamp, orderBy, where, writeBatch, getDoc, limit } from 'firebase/firestore';
@@ -39,13 +40,13 @@ import { reauthenticateForSensitiveAction, requiresPasswordReauth } from '../lib
 const Sales: React.FC = () => {
   const { shopId, currentUser, userRole } = useAuth();
   const navigate = useNavigate();
-  const { documents: sales, loading } = useFirestore<any>(
+  const { documents: sales, loading, refetch: refetchSales } = useFirestoreOnce<any>(
     shopId ? 'sales' : null, 
     where('shopId', '==', shopId),
     orderBy('saleDate', 'desc'),
     limit(200)
   );
-  const { documents: customers } = useFirestore<any>(
+  const { documents: customers } = useFirestoreOnce<any>(
     shopId ? 'customers' : null,
     where('shopId', '==', shopId)
   );
@@ -257,6 +258,7 @@ const Sales: React.FC = () => {
       setShowBulkDeleteModal(false);
       setDeleteTyped('');
       setDeletePassword('');
+      refetchSales();
     } catch (error: any) {
       const code = error?.code || '';
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {

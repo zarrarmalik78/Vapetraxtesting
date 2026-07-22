@@ -11,7 +11,8 @@ import {
   Share2,
   Table as TableIcon
 } from 'lucide-react';
-import { useFirestore, useDocument } from '../hooks/useFirestore';
+import { useDocument } from '../hooks/useFirestore';
+import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { format, startOfDay, endOfDay, isWithinInterval, subDays } from 'date-fns';
@@ -29,9 +30,9 @@ queryWindowStart.setHours(0, 0, 0, 0);
 
 const DetailedReports: React.FC = () => {
   const { shopId } = useAuth();
-  const { documents: sales, loading: salesLoading } = useFirestore<any>(shopId ? 'sales' : null, where('shopId', '==', shopId), where('saleDateClient', '>=', queryWindowStart));
-  const { documents: expenses, loading: expensesLoading } = useFirestore<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
-  const { documents: products } = useFirestore<any>(shopId ? 'products' : null, where('shopId', '==', shopId));
+  const { documents: sales, loading: salesLoading } = useFirestoreOnce<any>(shopId ? 'sales' : null, where('shopId', '==', shopId), where('saleDateClient', '>=', queryWindowStart));
+  const { documents: expenses, loading: expensesLoading } = useFirestoreOnce<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
+  const { documents: products } = useFirestoreOnce<any>(shopId ? 'products' : null, where('shopId', '==', shopId));
 
 
   const [reportType, setReportType] = useState('sales');

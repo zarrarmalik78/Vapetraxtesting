@@ -14,10 +14,10 @@ import {
   TrendingDown,
   Wallet
 } from 'lucide-react';
-import { useFirestore } from '../hooks/useFirestore';
+import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
-import { deleteDoc, doc, updateDoc, addDoc, collection, serverTimestamp, orderBy, where, writeBatch } from 'firebase/firestore';
+import { deleteDoc, doc, updateDoc, addDoc, collection, serverTimestamp, orderBy, where, writeBatch, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -30,10 +30,11 @@ const PersonalExpenses: React.FC = () => {
   const { shopId, userRole, currentUser } = useAuth();
   const isCashier = userRole === 'cashier';
   const needsPassword = requiresPasswordReauth(currentUser);
-  const { documents: expenses, loading } = useFirestore<any>(
+  const { documents: expenses, loading, refetch: refetchExpenses } = useFirestoreOnce<any>(
     shopId ? 'personal_expenses' : null, 
     where('shopId', '==', shopId),
-    orderBy('expenseDate', 'desc')
+    orderBy('expenseDate', 'desc'),
+    limit(200)
   );
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -62,6 +63,7 @@ const PersonalExpenses: React.FC = () => {
       try {
         await deleteDoc(doc(db, 'personal_expenses', id));
         toast.success('Personal expense deleted');
+        refetchExpenses();
       } catch (error) {
         toast.error('Failed to delete expense');
       }
@@ -90,6 +92,7 @@ const PersonalExpenses: React.FC = () => {
       setShowBulkDeleteModal(false);
       setDeleteTyped('');
       setDeletePassword('');
+      refetchExpenses();
     } catch (error: any) {
       const code = error?.code || '';
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') toast.error('Incorrect password.');
@@ -293,6 +296,7 @@ const PersonalExpenses: React.FC = () => {
           onClose={() => {
             setShowAddModal(false);
             setEditingExpense(null);
+            refetchExpenses();
           }}
         />
       )}

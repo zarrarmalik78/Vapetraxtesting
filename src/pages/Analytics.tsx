@@ -28,7 +28,7 @@ import {
   ArrowDownRight,
   BarChart
 } from 'lucide-react';
-import { useFirestore } from '../hooks/useFirestore';
+import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { startOfMonth, endOfMonth, subMonths, subDays, format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
@@ -46,10 +46,10 @@ queryWindowStart.setHours(0, 0, 0, 0);
 
 const Analytics: React.FC = () => {
   const { shopId } = useAuth();
-  const { documents: sales, loading: salesLoading } = useFirestore<any>(shopId ? 'sales' : null, where('shopId', '==', shopId), where('saleDateClient', '>=', queryWindowStart));
-  const { documents: expenses, loading: expensesLoading } = useFirestore<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
-  const { documents: customers, loading: customersLoading } = useFirestore<any>(shopId ? 'customers' : null, where('shopId', '==', shopId));
-  const { documents: products, loading: productsLoading } = useFirestore<any>(shopId ? 'products' : null, where('shopId', '==', shopId));
+  const { documents: sales, loading: salesLoading } = useFirestoreOnce<any>(shopId ? 'sales' : null, where('shopId', '==', shopId), where('saleDateClient', '>=', queryWindowStart));
+  const { documents: expenses, loading: expensesLoading } = useFirestoreOnce<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
+  const { documents: customers, loading: customersLoading } = useFirestoreOnce<any>(shopId ? 'customers' : null, where('shopId', '==', shopId));
+  const { documents: products, loading: productsLoading } = useFirestoreOnce<any>(shopId ? 'products' : null, where('shopId', '==', shopId));
 
   const [timeRange, setTimeRange] = useState('thisMonth');
   const [customStart, setCustomStart] = useState('');

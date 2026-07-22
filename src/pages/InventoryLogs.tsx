@@ -12,7 +12,7 @@ import {
   Tag,
   RefreshCw
 } from 'lucide-react';
-import { useFirestore } from '../hooks/useFirestore';
+import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { format } from 'date-fns';
@@ -22,7 +22,7 @@ import { toDisplayDate } from '../lib/dates';
 
 const InventoryLogs: React.FC = () => {
   const { shopId } = useAuth();
-  const { documents: logs, loading } = useFirestore<any>(
+  const { documents: logs, loading } = useFirestoreOnce<any>(
     shopId ? 'inventoryLogs' : null, 
     where('shopId', '==', shopId),
     firestoreOrderBy('createdAt', 'desc'),

@@ -17,7 +17,7 @@ import {
 import { getSalesCogs, getSaleItemCogs } from '../lib/finance';
 import { seedSampleData } from '../lib/seedData';
 import toast from 'react-hot-toast';
-import { useFirestore } from '../hooks/useFirestore';
+import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
 
 import { formatCurrency, cn } from '../lib/utils';
 import {
@@ -38,7 +38,7 @@ import {
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
 import { where } from 'firebase/firestore';
-import { useDocument } from '../hooks/useFirestore';
+// useDocument kept for future single-doc needs
 import { toDisplayDate } from '../lib/dates';
 import { parseBottleSizeMl } from '../lib/bottles';
 
@@ -51,10 +51,15 @@ queryWindowStart.setHours(0, 0, 0, 0);
 
 const Dashboard: React.FC = () => {
   const { shopId } = useAuth();
-  const { documents: products, loading: productsLoading } = useFirestore<any>(shopId ? 'products' : null, where('shopId', '==', shopId));
-  const { documents: sales, loading: salesLoading } = useFirestore<any>(shopId ? 'sales' : null, where('shopId', '==', shopId), where('saleDateClient', '>=', queryWindowStart));
-  const { documents: expenses, loading: expensesLoading } = useFirestore<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
-  const { documents: credits, loading: creditsLoading } = useFirestore<any>(shopId ? 'credits' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
+  // One-time fetches — no permanent real-time listeners. Call refetch() to update.
+  const { documents: products, loading: productsLoading, refetch: refetchProducts } = useFirestoreOnce<any>(shopId ? 'products' : null, where('shopId', '==', shopId));
+  const { documents: sales, loading: salesLoading, refetch: refetchSales } = useFirestoreOnce<any>(shopId ? 'sales' : null, where('shopId', '==', shopId), where('saleDateClient', '>=', queryWindowStart));
+  const { documents: expenses, loading: expensesLoading, refetch: refetchExpenses } = useFirestoreOnce<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
+  const { documents: credits, loading: creditsLoading, refetch: refetchCredits } = useFirestoreOnce<any>(shopId ? 'credits' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
+
+  const handleRefreshAll = React.useCallback(() => {
+    refetchProducts(); refetchSales(); refetchExpenses(); refetchCredits();
+  }, [refetchProducts, refetchSales, refetchExpenses, refetchCredits]);
   const [seeding, setSeeding] = React.useState(false);
   const [startDateStr, setStartDateStr] = React.useState('');
   const [endDateStr, setEndDateStr] = React.useState('');
@@ -256,12 +261,15 @@ const Dashboard: React.FC = () => {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Business Overview</h1>
-            <p className="text-slate-500 text-sm">Real-time performance analytics for your shop</p>
+            <p className="text-slate-500 text-sm">Business analytics for your shop (last 90 days)</p>
             <div className="flex items-center gap-3 mt-2">
-              <span className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                Live Data
-              </span>
+              <button
+                onClick={handleRefreshAll}
+                className="bg-violet-100 hover:bg-violet-200 text-violet-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1.5 transition-colors"
+              >
+                <RefreshCw size={10} />
+                Refresh Data
+              </button>
               <span className="bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1.5">
                 <Clock size={10} />
                 PKT (UTC+5)

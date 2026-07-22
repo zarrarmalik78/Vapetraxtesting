@@ -8,7 +8,7 @@ import {
   ArrowUpDown,
   X
 } from 'lucide-react';
-import { useFirestore } from '../hooks/useFirestore';
+import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { deleteDoc, doc, updateDoc, addDoc, collection, serverTimestamp, orderBy, where, increment, writeBatch, getDocs, query } from 'firebase/firestore';
@@ -44,7 +44,7 @@ const Stock: React.FC = () => {
   const { shopId, userRole, currentUser } = useAuth();
   const isAdmin = userRole === 'admin';
   const needsPassword = requiresPasswordReauth(currentUser);
-  const { documents: products, loading } = useFirestore<any>(
+  const { documents: products, loading, refetch: refetchProducts } = useFirestoreOnce<any>(
     shopId ? 'products' : null, 
     where('shopId', '==', shopId),
     orderBy('createdAt', 'desc')
@@ -145,6 +145,7 @@ const Stock: React.FC = () => {
       setProductToDelete(null);
       setDeleteReason('');
       setDeletePassword('');
+      refetchProducts();
     } catch (error: any) {
       const code = error?.code || '';
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') toast.error('Incorrect password.');
@@ -177,6 +178,7 @@ const Stock: React.FC = () => {
       setShowBulkDeleteModal(false);
       setDeleteTyped('');
       setDeletePassword('');
+      refetchProducts();
     } catch (error: any) {
       const code = error?.code || '';
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') toast.error('Incorrect password.');
@@ -425,6 +427,7 @@ const Stock: React.FC = () => {
       setImportRows([]);
       setImportFileName('');
       setImportProgress(0);
+      refetchProducts();
     } catch (error: any) {
       console.error(error);
       toast.error(error?.message || 'Bulk import failed');
@@ -675,12 +678,13 @@ const Stock: React.FC = () => {
           onClose={() => {
             setShowAddModal(false);
             setEditingProduct(null);
+            refetchProducts();
           }} 
         />
       )}
 
       {showBottleModal && (
-        <BottleModal product={showBottleModal} onClose={() => setShowBottleModal(null)} />
+        <BottleModal product={showBottleModal} onClose={() => { setShowBottleModal(null); refetchProducts(); }} />
       )}
 
       {showImportModal && (
