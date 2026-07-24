@@ -13,7 +13,7 @@ import {
   UserPlus,
   History
 } from 'lucide-react';
-import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
+import { useData } from '../contexts/DataContext';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { deleteDoc, doc, updateDoc, addDoc, collection, serverTimestamp, orderBy, where, writeBatch } from 'firebase/firestore';
@@ -29,11 +29,7 @@ import CustomerModal from '../components/customers/CustomerModal';
 
 const Customers: React.FC = () => {
   const { shopId, currentUser } = useAuth();
-  const { documents: customers, loading, refetch: refetchCustomers } = useFirestoreOnce<any>(
-    shopId ? 'customers' : null, 
-    where('shopId', '==', shopId),
-    orderBy('createdAt', 'desc')
-  );
+  const { customers, customersLoading: loading } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
@@ -66,7 +62,6 @@ const Customers: React.FC = () => {
       try {
         await deleteDoc(doc(db, 'customers', id));
         toast.success('Customer deleted successfully');
-        refetchCustomers();
       } catch (error) {
         toast.error('Failed to delete customer');
       }
@@ -108,7 +103,6 @@ const Customers: React.FC = () => {
       setShowBulkDeleteModal(false);
       setDeleteTyped('');
       setDeletePassword('');
-      refetchCustomers();
     } catch (error: any) {
       const code = error?.code || '';
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
@@ -331,7 +325,6 @@ const Customers: React.FC = () => {
           onClose={() => {
             setShowAddModal(false);
             setEditingCustomer(null);
-            refetchCustomers();
           }} 
         />
       )}
@@ -342,7 +335,6 @@ const Customers: React.FC = () => {
           onClose={() => {
             setShowAddCreditModal(false);
             setCreditCustomerId(undefined);
-            refetchCustomers();
           }}
         />
       )}

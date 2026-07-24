@@ -8,7 +8,7 @@ import {
   ArrowUpDown,
   X
 } from 'lucide-react';
-import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
+import { useData } from '../contexts/DataContext';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { deleteDoc, doc, updateDoc, addDoc, collection, serverTimestamp, orderBy, where, increment, writeBatch, getDocs, query } from 'firebase/firestore';
@@ -44,11 +44,7 @@ const Stock: React.FC = () => {
   const { shopId, userRole, currentUser } = useAuth();
   const isAdmin = userRole === 'admin';
   const needsPassword = requiresPasswordReauth(currentUser);
-  const { documents: products, loading, refetch: refetchProducts } = useFirestoreOnce<any>(
-    shopId ? 'products' : null, 
-    where('shopId', '==', shopId),
-    orderBy('createdAt', 'desc')
-  );
+  const { products, productsLoading: loading } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'createdAt', direction: 'desc' });
@@ -145,7 +141,6 @@ const Stock: React.FC = () => {
       setProductToDelete(null);
       setDeleteReason('');
       setDeletePassword('');
-      refetchProducts();
     } catch (error: any) {
       const code = error?.code || '';
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') toast.error('Incorrect password.');
@@ -178,7 +173,6 @@ const Stock: React.FC = () => {
       setShowBulkDeleteModal(false);
       setDeleteTyped('');
       setDeletePassword('');
-      refetchProducts();
     } catch (error: any) {
       const code = error?.code || '';
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') toast.error('Incorrect password.');
@@ -427,7 +421,6 @@ const Stock: React.FC = () => {
       setImportRows([]);
       setImportFileName('');
       setImportProgress(0);
-      refetchProducts();
     } catch (error: any) {
       console.error(error);
       toast.error(error?.message || 'Bulk import failed');
@@ -678,13 +671,12 @@ const Stock: React.FC = () => {
           onClose={() => {
             setShowAddModal(false);
             setEditingProduct(null);
-            refetchProducts();
           }} 
         />
       )}
 
       {showBottleModal && (
-        <BottleModal product={showBottleModal} onClose={() => { setShowBottleModal(null); refetchProducts(); }} />
+        <BottleModal product={showBottleModal} onClose={() => setShowBottleModal(null)} />
       )}
 
       {showImportModal && (
