@@ -17,7 +17,7 @@ import {
   Split,
   UserPlus
 } from 'lucide-react';
-import { useFirestore } from '../hooks/useFirestore';
+import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import {
@@ -61,11 +61,11 @@ const NewSale: React.FC = () => {
   const editSale = location.state?.editSale;
   const isEditing = !!editSale;
 
-  const { documents: products, loading: productsLoading } = useFirestore<any>(
+  const { documents: products, loading: productsLoading, refetch: refetchProducts } = useFirestoreOnce<any>(
     shopId ? 'products' : null,
     where('shopId', '==', shopId)
   );
-  const { documents: customers, loading: customersLoading } = useFirestore<any>(
+  const { documents: customers, loading: customersLoading, refetch: refetchCustomers } = useFirestoreOnce<any>(
     shopId ? 'customers' : null,
     where('shopId', '==', shopId)
   );
@@ -606,6 +606,8 @@ const NewSale: React.FC = () => {
       setSaleDateOverride('');
       setIsProcessing(false);
       setShowSuccessOverlay(true);
+      // Refresh products so stock quantities are up-to-date for the next sale
+      refetchProducts();
       setTimeout(() => {
         setShowSuccessOverlay(false);
         if (isEditing) {
@@ -1193,6 +1195,7 @@ const NewSale: React.FC = () => {
           onClose={() => setShowAddCustomerModal(false)}
           onSuccess={(newCustomerId) => {
             setSelectedCustomerId(newCustomerId);
+            refetchCustomers();
           }}
         />
       )}

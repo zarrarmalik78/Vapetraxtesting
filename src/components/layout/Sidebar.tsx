@@ -28,13 +28,13 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useConnectivity } from '../../hooks/useConnectivity';
-import { useDocument } from '../../hooks/useFirestore';
+import { useDocumentOnce } from '../../hooks/useFirestoreOnce';
 import { cn } from '../../lib/utils';
 
 const Sidebar: React.FC = () => {
   const { currentUser, userRole, shopId, logout } = useAuth();
   const { status: connectivityStatus } = useConnectivity();
-  const { document: settings } = useDocument<any>('settings', shopId || 'shop_settings');
+  const { document: settings } = useDocumentOnce<any>('settings', shopId || 'shop_settings');
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark' || 

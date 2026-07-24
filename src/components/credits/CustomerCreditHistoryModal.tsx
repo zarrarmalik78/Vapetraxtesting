@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { X, CreditCard, ArrowUpRight, ArrowDownRight, User } from 'lucide-react';
-import { useFirestore } from '../../hooks/useFirestore';
+import { useFirestoreOnce } from '../../hooks/useFirestoreOnce';
 import { formatCurrency, cn } from '../../lib/utils';
 import { orderBy, where } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
@@ -17,14 +17,14 @@ interface CustomerCreditHistoryModalProps {
 const CustomerCreditHistoryModal: React.FC<CustomerCreditHistoryModalProps> = ({ customerId, customerName, onClose }) => {
   const { shopId } = useAuth();
   
-  const { documents: manualCredits, loading: creditsLoading } = useFirestore<any>(
+  const { documents: manualCredits, loading: creditsLoading } = useFirestoreOnce<any>(
     shopId ? 'credits' : null, 
     where('shopId', '==', shopId),
     where('customerId', '==', customerId),
     orderBy('createdAt', 'desc')
   );
 
-  const { documents: sales, loading: salesLoading } = useFirestore<any>(
+  const { documents: sales, loading: salesLoading } = useFirestoreOnce<any>(
     shopId ? 'sales' : null, 
     where('shopId', '==', shopId),
     where('customerId', '==', customerId),

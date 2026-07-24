@@ -11,7 +11,6 @@ import {
   Share2,
   Table as TableIcon
 } from 'lucide-react';
-import { useDocument } from '../hooks/useFirestore';
 import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';

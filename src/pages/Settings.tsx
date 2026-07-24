@@ -25,7 +25,7 @@ import {
   Info,
   Download
 } from 'lucide-react';
-import { useFirestore, useDocument } from '../hooks/useFirestore';
+import { useFirestoreOnce, useDocumentOnce } from '../hooks/useFirestoreOnce';
 import { usePWA } from '../hooks/usePWA';
 import { db } from '../firebase';
 import { doc, setDoc, updateDoc, serverTimestamp, where } from 'firebase/firestore';
@@ -37,8 +37,8 @@ import { BackupRestoreTab } from '../components/settings/BackupRestoreTab';
 
 const Settings: React.FC = () => {
   const { shopId, currentUser, createCashier, deleteCashier, resetPassword } = useAuth();
-  const { document: settings, loading } = useDocument<any>(shopId ? 'settings' : null, shopId ? (shopId || 'shop_settings') : null);
-  const { document: adminUser } = useDocument<any>('users', currentUser?.uid || '___none___');
+  const { document: settings, loading } = useDocumentOnce<any>(shopId ? 'settings' : null, shopId ? (shopId || 'shop_settings') : null);
+  const { document: adminUser } = useDocumentOnce<any>('users', currentUser?.uid || '___none___');
   const { canInstall, isStandalone, promptInstall } = usePWA();
   const [activeTab, setActiveTab] = useState('shop');
   const [formData, setFormData] = useState<any>(null);
@@ -523,7 +523,7 @@ const CashierManagement: React.FC<{
   onSaveAdmin: () => Promise<void>;
   onResetPassword: (email: string) => Promise<void>;
 }> = ({ shopId, createCashier, deleteCashier, adminForm, setAdminForm, adminSaving, onSaveAdmin, onResetPassword }) => {
-  const { documents: cashiers, loading } = useFirestore<any>(
+  const { documents: cashiers, loading } = useFirestoreOnce<any>(
     shopId ? 'users' : null,
     where('shopId', '==', shopId),
     where('role', '==', 'cashier')

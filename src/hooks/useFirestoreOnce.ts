@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { collection, getDocs, query, QueryConstraint, DocumentData } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, query, QueryConstraint, DocumentData } from 'firebase/firestore';
 import { db } from '../firebase';
 
 /**
@@ -80,4 +80,60 @@ export function useFirestoreOnce<T = DocumentData>(
   }, []);
 
   return { documents, loading, error, refetch };
+}
+
+/**
+ * One-time single-document fetch hook.
+ *
+ * Replaces useDocument (which uses onSnapshot) with a single getDoc call.
+ * Call refetch() after write operations to get fresh data.
+ */
+export function useDocumentOnce<T = DocumentData>(
+  collectionName: string | null | false,
+  docId: string | null | false
+) {
+  const [document, setDocument] = useState<T | null>(null);
+  const [loading, setLoading] = useState<boolean>(!!collectionName && !!docId);
+  const [error, setError] = useState<Error | null>(null);
+  const [fetchTrigger, setFetchTrigger] = useState(0);
+
+  useEffect(() => {
+    if (!collectionName || !docId) {
+      setDocument(null);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    getDoc(doc(db, collectionName, docId))
+      .then(snapshot => {
+        if (cancelled) return;
+        if (snapshot.exists()) {
+          setDocument({ id: snapshot.id, ...snapshot.data() } as T);
+        } else {
+          setDocument(null);
+        }
+      })
+      .catch(err => {
+        if (cancelled) return;
+        console.error(`[useDocumentOnce] Error on "${collectionName}/${docId}":`, err);
+        setError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [collectionName, docId, fetchTrigger]);
+
+  const refetch = useCallback(() => {
+    setFetchTrigger(t => t + 1);
+  }, []);
+
+  return { document, loading, error, refetch };
 }

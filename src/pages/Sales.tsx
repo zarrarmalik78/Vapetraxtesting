@@ -23,8 +23,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { deleteSaleWithReversal, reverseSaleImpact } from '../lib/salesReversal';
-import { useFirestore, useDocument } from '../hooks/useFirestore';
-import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
+import { useFirestoreOnce, useDocumentOnce } from '../hooks/useFirestoreOnce';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { doc, increment, collection, serverTimestamp, orderBy, where, writeBatch, getDoc, limit } from 'firebase/firestore';
@@ -560,7 +559,7 @@ const Sales: React.FC = () => {
 
 const InvoiceModal: React.FC<{ sale: any, customer: any, onClose: () => void, onRemoveItem?: (idx: number) => void }> = ({ sale, customer, onClose, onRemoveItem }) => {
   const { shopId } = useAuth();
-  const { document: settings } = useDocument<any>(shopId ? 'settings' : null, shopId ? (shopId || 'shop_settings') : null);
+  const { document: settings } = useDocumentOnce<any>(shopId ? 'settings' : null, shopId ? (shopId || 'shop_settings') : null);
 
   const handlePrint = () => {
     window.print();
