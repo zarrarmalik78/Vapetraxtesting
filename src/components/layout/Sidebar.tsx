@@ -112,10 +112,7 @@ const Sidebar: React.FC = () => {
 
   const bottomNavItems = [
     { name: 'Sales History', path: '/sales', icon: History, roles: ['admin', 'cashier'] },
-    { name: 'Personal Expenses', path: '/personal-expenses', icon: Home, roles: ['admin'] },
-    { name: 'Analytics', path: '/analytics', icon: BarChart3, roles: ['admin'] },
     { name: 'Detailed Reports', path: '/reports/detailed', icon: FileText, roles: ['admin'] },
-    { name: 'Accounting', path: '/finance', icon: Landmark, roles: ['admin'] },
   ];
 
   const filteredTopNav = topNavItems.filter(item => item.roles.includes(userRole || ''));

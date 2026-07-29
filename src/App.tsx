@@ -19,12 +19,9 @@ import Sales from './pages/Sales';
 import Customers from './pages/Customers';
 
 import Expenses from './pages/Expenses';
-import PersonalExpenses from './pages/PersonalExpenses';
-import Analytics from './pages/Analytics';
 import DetailedReports from './pages/DetailedReports';
 import InventoryLogs from './pages/InventoryLogs';
 import Settings from './pages/Settings';
-import Finance from './pages/Finance';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Run background tasks (daily summary + low stock checker) while authenticated
@@ -104,18 +101,6 @@ function App() {
               </ProtectedRoute>
             } />
             
-            <Route path="/personal-expenses" element={
-              <ProtectedRoute requiredRole="admin">
-                <Layout><PersonalExpenses /></Layout>
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/analytics" element={
-              <ProtectedRoute requiredRole="admin">
-                <Layout><Analytics /></Layout>
-              </ProtectedRoute>
-            } />
-            
             <Route path="/reports/detailed" element={
               <ProtectedRoute requiredRole="admin">
                 <Layout><DetailedReports /></Layout>
@@ -131,12 +116,6 @@ function App() {
             <Route path="/settings" element={
               <ProtectedRoute requiredRole="admin">
                 <Layout><Settings /></Layout>
-              </ProtectedRoute>
-            } />
-
-            <Route path="/finance" element={
-              <ProtectedRoute requiredRole="admin">
-                <Layout><Finance /></Layout>
               </ProtectedRoute>
             } />
 

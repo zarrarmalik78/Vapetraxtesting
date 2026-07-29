@@ -29,10 +29,11 @@ queryWindowStart.setHours(0, 0, 0, 0);
 
 const DetailedReports: React.FC = () => {
   const { shopId } = useAuth();
-  const { documents: sales, loading: salesLoading } = useFirestoreOnce<any>(shopId ? 'sales' : null, where('shopId', '==', shopId), where('saleDateClient', '>=', queryWindowStart));
-  const { documents: expenses, loading: expensesLoading } = useFirestoreOnce<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
-  const { documents: products } = useFirestoreOnce<any>(shopId ? 'products' : null, where('shopId', '==', shopId));
-
+  const [hasSearched, setHasSearched] = useState(false);
+  
+  const { documents: sales, loading: salesLoading } = useFirestoreOnce<any>(hasSearched && shopId ? 'sales' : null, where('shopId', '==', shopId), where('saleDateClient', '>=', queryWindowStart));
+  const { documents: expenses, loading: expensesLoading } = useFirestoreOnce<any>(hasSearched && shopId ? 'expenses' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
+  const { documents: products } = useFirestoreOnce<any>(hasSearched && shopId ? 'products' : null, where('shopId', '==', shopId));
 
   const [reportType, setReportType] = useState('sales');
   const [dateRange, setDateRange] = useState({
@@ -69,7 +70,7 @@ const DetailedReports: React.FC = () => {
     XLSX.writeFile(wb, filename);
   };
 
-  if (salesLoading || expensesLoading) return <LoadingSpinner />;
+  if (hasSearched && (salesLoading || expensesLoading)) return <LoadingSpinner />;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-12">
@@ -139,12 +140,26 @@ const DetailedReports: React.FC = () => {
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm text-slate-900 font-medium focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none transition-all"
               />
             </div>
+            <button 
+              onClick={() => setHasSearched(true)}
+              className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-violet-600/20"
+            >
+              Generate
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Profit Summary Panel */}
-      {reportType === 'profit' && (() => {
+      {!hasSearched && (
+        <div className="glass-card p-16 text-center">
+          <div className="w-16 h-16 rounded-full bg-violet-50 flex items-center justify-center mx-auto mb-4">
+            <Search className="text-violet-300" size={32} />
+          </div>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">Select dates and click Generate to view reports</p>
+        </div>
+      )}
+
+      {hasSearched && reportType === 'profit' && (() => {
         const startDate = startOfDay(new Date(dateRange.start));
         const endDate = endOfDay(new Date(dateRange.end));
 
@@ -228,7 +243,7 @@ const DetailedReports: React.FC = () => {
       })()}
 
       {/* Report Summary Cards */}
-      {reportType !== 'profit' && (
+      {hasSearched && reportType !== 'profit' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="glass-card p-6">
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Total Entries</p>
@@ -250,7 +265,7 @@ const DetailedReports: React.FC = () => {
       )}
 
       {/* Report Table */}
-      {reportType !== 'profit' && (
+      {hasSearched && reportType !== 'profit' && (
         <div className="glass-card overflow-hidden">
           <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
             <h3 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">

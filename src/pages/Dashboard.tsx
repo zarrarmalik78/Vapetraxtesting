@@ -305,16 +305,7 @@ const Dashboard: React.FC = () => {
           )}
         </div>
 
-        {products.length === 0 && (
-          <button
-            onClick={handleSeedData}
-            disabled={seeding}
-            className="flex items-center gap-2 px-6 py-3 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-fuchsia-600/20 uppercase tracking-widest text-xs"
-          >
-            {seeding ? <RefreshCw className="animate-spin" size={18} /> : <Database size={18} />}
-            Seed Sample Data
-          </button>
-        )}
+
       </header>
 
 
@@ -383,96 +374,9 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* New Graphs: Peak Hours & Margin vs Volume */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        {/* Peak Hours Heatmap */}
-        <div className="glass-card p-6">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Peak Hours</h3>
-              <p className="text-xs text-slate-500 font-medium">Busiest times by revenue</p>
-            </div>
-            <Clock size={20} className="text-amber-500" />
-          </div>
-          <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%" minHeight={0} minWidth={0}>
-              <BarChart data={heatmapData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis 
-                  dataKey="hour" 
-                  stroke="#94a3b8" 
-                  fontSize={10} 
-                  tickLine={false} 
-                  axisLine={false}
-                  dy={10}
-                />
-                <YAxis 
-                  stroke="#94a3b8" 
-                  fontSize={10} 
-                  tickLine={false} 
-                  axisLine={false}
-                  tickFormatter={(val) => `${val/1000}k`}
-                />
-                <Tooltip 
-                  cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  formatter={(value: any) => [formatCurrency(value), 'Revenue']}
-                />
-                <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
-                  {heatmapData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={entry.revenue > 10000 ? '#f59e0b' : '#fbbf24'} 
-                      fillOpacity={entry.revenue > 0 ? 1 : 0.3}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Top Products Bar Chart */}
-        <div className="glass-card p-6">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Top Performers</h3>
-              <p className="text-xs text-slate-500 font-medium">Highest revenue products</p>
-            </div>
-            <Activity size={20} className="text-emerald-500" />
-          </div>
-          <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%" minHeight={0} minWidth={0}>
-              <BarChart data={topProductsData} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                <XAxis type="number" hide />
-                <YAxis 
-                  type="category" 
-                  dataKey="name" 
-                  stroke="#94a3b8" 
-                  fontSize={10} 
-                  tickLine={false} 
-                  axisLine={false}
-                  width={100}
-                />
-                <Tooltip 
-                  cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  formatter={(value: any, name: string) => [
-                    name === 'revenue' ? formatCurrency(value) : value, 
-                    name === 'revenue' ? 'Revenue' : 'Units Sold'
-                  ]}
-                />
-                <Bar dataKey="revenue" fill="#10b981" radius={[0, 4, 4, 0]} barSize={20} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 glass-card p-6">
+      <div className="grid grid-cols-1 gap-8">
+        <div className="glass-card p-6">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
               <Activity className="text-blue-600" size={20} />
@@ -537,47 +441,10 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="glass-card p-6">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-lg font-bold text-slate-900">Category Performance</h3>
-          </div>
-          <div className="h-[350px] w-full">
-            <ResponsiveContainer width="100%" height="100%" minHeight={0} minWidth={0}>
-              <BarChart data={categoryData} layout="vertical" margin={{ left: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                <XAxis type="number" hide />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  stroke="#94a3b8"
-                  fontSize={10}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px' }}
-                />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={40}>
-                  {categoryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-4 justify-center">
-            {categoryData.map((item) => (
-              <div key={item.name} className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></div>
-                {item.name}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+
 
       {/* Footer Badge */}
+      </div>
       <div className="flex justify-center pt-4">
         <div className="bg-gradient-to-r from-violet-600 to-fuchsia-600 p-[1px] rounded-full shadow-lg shadow-violet-600/20">
           <div className="bg-white/90 backdrop-blur-sm px-6 py-1.5 rounded-full text-[10px] font-bold text-violet-700 uppercase tracking-widest">
