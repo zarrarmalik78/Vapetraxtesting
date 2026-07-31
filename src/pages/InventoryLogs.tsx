@@ -15,19 +15,58 @@ import {
 import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { orderBy as firestoreOrderBy, where, limit } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { toDisplayDate } from '../lib/dates';
 
 const InventoryLogs: React.FC = () => {
   const { shopId } = useAuth();
+  const [hasSearched, setHasSearched] = useState(false);
+  const [dateRange, setDateRange] = useState({
+    start: format(new Date(), 'yyyy-MM-dd'),
+    end: format(new Date(), 'yyyy-MM-dd')
+  });
+  const [activePreset, setActivePreset] = useState<string>('today');
+
   const { documents: logs, loading } = useFirestoreOnce<any>(
-    shopId ? 'inventoryLogs' : null, 
+    hasSearched && shopId ? 'inventoryLogs' : null, 
     where('shopId', '==', shopId),
+    where('createdAt', '>=', startOfDay(new Date(dateRange.start))),
+    where('createdAt', '<=', endOfDay(new Date(dateRange.end))),
     firestoreOrderBy('createdAt', 'desc'),
-    limit(300)
+    limit(1000)
   );
+
+  const handlePreset = (preset: string) => {
+    const today = new Date();
+    let start = new Date(today);
+    let end = new Date(today);
+
+    switch (preset) {
+      case 'today':
+        break;
+      case 'yesterday':
+        start = subDays(today, 1);
+        end = subDays(today, 1);
+        break;
+      case 'last7':
+        start = subDays(today, 6);
+        break;
+      case 'last30':
+        start = subDays(today, 29);
+        break;
+      case 'complete':
+        start = new Date('2020-01-01');
+        break;
+    }
+
+    setDateRange({
+      start: format(start, 'yyyy-MM-dd'),
+      end: format(end, 'yyyy-MM-dd')
+    });
+    setActivePreset(preset);
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
 
@@ -40,7 +79,7 @@ const InventoryLogs: React.FC = () => {
     );
   }, [logs, searchTerm, typeFilter]);
 
-  if (loading) return <LoadingSpinner />;
+  if (hasSearched && loading) return <LoadingSpinner />;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-12">
@@ -58,7 +97,48 @@ const InventoryLogs: React.FC = () => {
       </header>
 
       {/* Filters & Search */}
-      <div className="glass-card p-4 flex flex-col md:flex-row gap-4">
+      <div className="glass-card p-4 space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {['today', 'yesterday', 'last7', 'last30', 'complete'].map(preset => (
+            <button
+              key={preset}
+              onClick={() => handlePreset(preset)}
+              className={cn(
+                "px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-xl transition-all",
+                activePreset === preset ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20" : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+              )}
+            >
+              {preset === 'last7' ? 'Last 7 Days' : preset === 'last30' ? 'Last 30 Days' : preset}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex items-center gap-3">
+            <input 
+              type="date" 
+              value={dateRange.start}
+              onChange={(e) => { setDateRange({...dateRange, start: e.target.value}); setActivePreset('custom'); }}
+              className="px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none transition-all"
+            />
+            <span className="text-slate-300 font-bold text-xs uppercase">to</span>
+            <input 
+              type="date" 
+              value={dateRange.end}
+              onChange={(e) => { setDateRange({...dateRange, end: e.target.value}); setActivePreset('custom'); }}
+              className="px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none transition-all"
+            />
+          </div>
+          <button
+            onClick={() => setHasSearched(true)}
+            className="flex items-center gap-2 px-6 py-2.5 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-fuchsia-600/20"
+          >
+            <Search size={16} />
+            Load Logs
+          </button>
+        </div>
+        
+        {hasSearched && (
+          <div className="flex flex-col md:flex-row gap-4 pt-4 border-t border-slate-100">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
@@ -84,9 +164,21 @@ const InventoryLogs: React.FC = () => {
             <option value="adjustment">Manual Adjustment</option>
           </select>
         </div>
+        </div>
+        )}
       </div>
 
+      {!hasSearched && (
+        <div className="glass-card p-16 text-center">
+          <div className="w-16 h-16 rounded-full bg-violet-50 flex items-center justify-center mx-auto mb-4">
+            <History className="text-violet-300" size={32} />
+          </div>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">Select dates and click Load Logs to view history</p>
+        </div>
+      )}
+
       {/* Logs Table */}
+      {hasSearched && (
       <div className="glass-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -174,6 +266,7 @@ const InventoryLogs: React.FC = () => {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 };

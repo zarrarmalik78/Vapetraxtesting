@@ -26,10 +26,12 @@ import { deleteSaleWithReversal, reverseSaleImpact } from '../lib/salesReversal'
 import { useFirestoreOnce, useDocumentOnce } from '../hooks/useFirestoreOnce';
 import { formatCurrency, cn } from '../lib/utils';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
-import { doc, increment, collection, serverTimestamp, orderBy, where, writeBatch, getDoc, limit } from 'firebase/firestore';
+import { doc, increment, collection, serverTimestamp, orderBy as firestoreOrderBy, where, writeBatch, getDoc, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
 import toast from 'react-hot-toast';
+import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { parseBottleSizeMl } from '../lib/bottles';
 import { buildActorMeta } from '../lib/actor';
 import { toDisplayDate } from '../lib/dates';
@@ -39,16 +41,52 @@ import { reauthenticateForSensitiveAction, requiresPasswordReauth } from '../lib
 const Sales: React.FC = () => {
   const { shopId, currentUser, userRole } = useAuth();
   const navigate = useNavigate();
+  const { customers } = useData();
+  const [hasSearched, setHasSearched] = useState(true);
+  const [dateRange, setDateRange] = useState({
+    start: format(new Date(), 'yyyy-MM-dd'),
+    end: format(new Date(), 'yyyy-MM-dd')
+  });
+  const [activePreset, setActivePreset] = useState<string>('today');
+
   const { documents: sales, loading, refetch: refetchSales } = useFirestoreOnce<any>(
-    shopId ? 'sales' : null, 
+    hasSearched && shopId ? 'sales' : null, 
     where('shopId', '==', shopId),
-    orderBy('saleDate', 'desc'),
-    limit(200)
+    where('saleDate', '>=', startOfDay(new Date(dateRange.start))),
+    where('saleDate', '<=', endOfDay(new Date(dateRange.end))),
+    firestoreOrderBy('saleDate', 'desc'),
+    limit(500)
   );
-  const { documents: customers } = useFirestoreOnce<any>(
-    shopId ? 'customers' : null,
-    where('shopId', '==', shopId)
-  );
+
+  const handlePreset = (preset: string) => {
+    const today = new Date();
+    let start = new Date(today);
+    let end = new Date(today);
+
+    switch (preset) {
+      case 'today':
+        break;
+      case 'yesterday':
+        start = subDays(today, 1);
+        end = subDays(today, 1);
+        break;
+      case 'last7':
+        start = subDays(today, 6);
+        break;
+      case 'last30':
+        start = subDays(today, 29);
+        break;
+      case 'complete':
+        start = new Date('2020-01-01');
+        break;
+    }
+
+    setDateRange({
+      start: format(start, 'yyyy-MM-dd'),
+      end: format(end, 'yyyy-MM-dd')
+    });
+    setActivePreset(preset);
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [showInvoiceModal, setShowInvoiceModal] = useState<any | null>(null);
@@ -330,40 +368,80 @@ const Sales: React.FC = () => {
       </div>
 
       {/* Filters & Search */}
-      <div className="glass-card p-4 flex flex-col md:flex-row gap-4 bg-slate-50/50">
-        <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text" 
-            placeholder="Search by customer name or sale ID..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all shadow-sm"
-          />
+      <div className="glass-card p-4 space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {['today', 'yesterday', 'last7', 'last30', 'complete'].map(preset => (
+            <button
+              key={preset}
+              onClick={() => handlePreset(preset)}
+              className={cn(
+                "px-4 py-2 text-xs font-bold uppercase tracking-widest rounded-xl transition-all",
+                activePreset === preset ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20" : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+              )}
+            >
+              {preset === 'last7' ? 'Last 7 Days' : preset === 'last30' ? 'Last 30 Days' : preset}
+            </button>
+          ))}
         </div>
-        <div className="flex gap-3">
-          <select 
-            value={paymentFilter}
-            onChange={(e) => setPaymentFilter(e.target.value)}
-            className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-500/20 shadow-sm"
-          >
-            <option value="all">All Payments</option>
-            <option value="cash">Cash</option>
-            <option value="online">Online</option>
-            <option value="credit">Credit</option>
-            <option value="split">Split</option>
-            <option value="return">Return</option>
-          </select>
-
-        </div>
-        {userRole === 'admin' && selectedIds.length > 0 && (
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex items-center gap-3">
+            <input 
+              type="date" 
+              value={dateRange.start}
+              onChange={(e) => { setDateRange({...dateRange, start: e.target.value}); setActivePreset('custom'); }}
+              className="px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none transition-all"
+            />
+            <span className="text-slate-300 font-bold text-xs uppercase">to</span>
+            <input 
+              type="date" 
+              value={dateRange.end}
+              onChange={(e) => { setDateRange({...dateRange, end: e.target.value}); setActivePreset('custom'); }}
+              className="px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none transition-all"
+            />
+          </div>
           <button
-            onClick={() => setShowBulkDeleteModal(true)}
-            className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold"
+            onClick={() => setHasSearched(true)}
+            className="flex items-center gap-2 px-6 py-2.5 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-fuchsia-600/20"
           >
-            Delete Selected ({selectedIds.length})
+            <Search size={16} />
+            Load Sales
           </button>
-        )}
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-4 pt-4 border-t border-slate-100">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input 
+              type="text" 
+              placeholder="Search by customer name or sale ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all shadow-sm"
+            />
+          </div>
+          <div className="flex gap-3">
+            <select 
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value)}
+              className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-500/20 shadow-sm"
+            >
+              <option value="all">All Payments</option>
+              <option value="cash">Cash</option>
+              <option value="online">Online</option>
+              <option value="credit">Credit</option>
+              <option value="split">Split</option>
+              <option value="return">Return</option>
+            </select>
+          </div>
+          {userRole === 'admin' && selectedIds.length > 0 && (
+            <button
+              onClick={() => setShowBulkDeleteModal(true)}
+              className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold"
+            >
+              Delete Selected ({selectedIds.length})
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Sales Table */}
