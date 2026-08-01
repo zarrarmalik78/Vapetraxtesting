@@ -17,7 +17,8 @@ import {
 import { getSalesCogs, getSaleItemCogs } from '../lib/finance';
 import { seedSampleData } from '../lib/seedData';
 import toast from 'react-hot-toast';
-import { useFirestoreOnce } from '../hooks/useFirestoreOnce';
+import { useFirestoreOnce, useCachedFirestoreOnce } from '../hooks/useFirestoreOnce';
+import { useData } from '../contexts/DataContext';
 
 import { formatCurrency, cn } from '../lib/utils';
 import {
@@ -42,24 +43,44 @@ import { where } from 'firebase/firestore';
 import { toDisplayDate } from '../lib/dates';
 import { parseBottleSizeMl } from '../lib/bottles';
 
-// Only fetch the last 90 days of transactional data to stay within Firebase quotas.
-// This covers monthly, weekly, and daily KPIs plus the 30-day trend chart.
-const QUERY_WINDOW_DAYS = 90;
+// Only fetch the last 30 days of transactional data to stay within Firebase quotas.
+const QUERY_WINDOW_DAYS = 30;
 const queryWindowStart = new Date();
 queryWindowStart.setDate(queryWindowStart.getDate() - QUERY_WINDOW_DAYS);
 queryWindowStart.setHours(0, 0, 0, 0);
 
+const todayStart = new Date();
+todayStart.setHours(0, 0, 0, 0);
+
 const Dashboard: React.FC = () => {
   const { shopId } = useAuth();
-  // One-time fetches — no permanent real-time listeners. Call refetch() to update.
-  const { documents: products, loading: productsLoading, refetch: refetchProducts } = useFirestoreOnce<any>(shopId ? 'products' : null, where('shopId', '==', shopId));
-  const { documents: sales, loading: salesLoading, refetch: refetchSales } = useFirestoreOnce<any>(shopId ? 'sales' : null, where('shopId', '==', shopId), where('saleDateClient', '>=', queryWindowStart));
-  const { documents: expenses, loading: expensesLoading, refetch: refetchExpenses } = useFirestoreOnce<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
-  const { documents: credits, loading: creditsLoading, refetch: refetchCredits } = useFirestoreOnce<any>(shopId ? 'credits' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart));
+  
+  // Products from global memory cache (0 reads)
+  const { products, productsLoading } = useData();
+
+  // Cached Historical Fetches (Last 30 Days excluding Today - fetched once per session)
+  const { documents: historicalSales, loading: hSalesLoading, refetch: refetchHSales } = useCachedFirestoreOnce<any>(shopId ? 'sales' : null, where('shopId', '==', shopId), where('saleDateClient', '>=', queryWindowStart), where('saleDateClient', '<', todayStart));
+  const { documents: historicalExpenses, loading: hExpensesLoading, refetch: refetchHExpenses } = useCachedFirestoreOnce<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart), where('createdAtClient', '<', todayStart));
+  const { documents: historicalCredits, loading: hCreditsLoading, refetch: refetchHCredits } = useCachedFirestoreOnce<any>(shopId ? 'credits' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', queryWindowStart), where('createdAtClient', '<', todayStart));
+
+  // Fresh Live Fetches (Today Only - fetched every time dashboard opens, ~50 reads)
+  const { documents: todaySales, loading: tSalesLoading, refetch: refetchTSales } = useFirestoreOnce<any>(shopId ? 'sales' : null, where('shopId', '==', shopId), where('saleDateClient', '>=', todayStart));
+  const { documents: todayExpenses, loading: tExpensesLoading, refetch: refetchTExpenses } = useFirestoreOnce<any>(shopId ? 'expenses' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', todayStart));
+  const { documents: todayCredits, loading: tCreditsLoading, refetch: refetchTCredits } = useFirestoreOnce<any>(shopId ? 'credits' : null, where('shopId', '==', shopId), where('createdAtClient', '>=', todayStart));
+
+  // Combine streams for Dashboard logic to remain unmodified
+  const sales = React.useMemo(() => [...historicalSales, ...todaySales], [historicalSales, todaySales]);
+  const expenses = React.useMemo(() => [...historicalExpenses, ...todayExpenses], [historicalExpenses, todayExpenses]);
+  const credits = React.useMemo(() => [...historicalCredits, ...todayCredits], [historicalCredits, todayCredits]);
+
+  const salesLoading = hSalesLoading || tSalesLoading;
+  const expensesLoading = hExpensesLoading || tExpensesLoading;
+  const creditsLoading = hCreditsLoading || tCreditsLoading;
 
   const handleRefreshAll = React.useCallback(() => {
-    refetchProducts(); refetchSales(); refetchExpenses(); refetchCredits();
-  }, [refetchProducts, refetchSales, refetchExpenses, refetchCredits]);
+    refetchHSales(); refetchHExpenses(); refetchHCredits();
+    refetchTSales(); refetchTExpenses(); refetchTCredits();
+  }, [refetchHSales, refetchHExpenses, refetchHCredits, refetchTSales, refetchTExpenses, refetchTCredits]);
   const [seeding, setSeeding] = React.useState(false);
   const [startDateStr, setStartDateStr] = React.useState('');
   const [endDateStr, setEndDateStr] = React.useState('');
@@ -347,12 +368,7 @@ const Dashboard: React.FC = () => {
 
         {/* Row 2 Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-2">
-          <MetricCard
-            title={`${cardPrefix} EXPENSE`}
-            value={formatCurrency(periodExpense)}
-            icon={<TrendingDown size={24} className="text-white" />}
-            colorClass="metric-card-red shadow-rose-500/20"
-          />
+
           <MetricCard
             title="WEEKLY PROFIT"
             value={formatCurrency(weeklyProfit)}

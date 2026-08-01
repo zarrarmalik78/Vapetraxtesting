@@ -82,6 +82,80 @@ export function useFirestoreOnce<T = DocumentData>(
   return { documents, loading, error, refetch };
 }
 
+const globalQueryCache = new Map<string, any[]>();
+
+/**
+ * Cached one-time Firestore fetch hook.
+ * Functions exactly like useFirestoreOnce, but stores the result in an in-memory
+ * global cache. If the exact same query is requested again in the session (e.g. 
+ * navigating back to the Dashboard), it instantly returns the cached data (0 reads).
+ * 
+ * Call refetch() to bypass cache and fetch fresh data from Firebase.
+ */
+export function useCachedFirestoreOnce<T = DocumentData>(
+  collectionName: string | null | false,
+  ...queryConstraints: QueryConstraint[]
+) {
+  const [documents, setDocuments] = useState<T[]>([]);
+  const [loading, setLoading] = useState<boolean>(!!collectionName);
+  const [error, setError] = useState<Error | null>(null);
+  const [fetchTrigger, setFetchTrigger] = useState(0);
+
+  const constraintsKey = queryConstraints
+    .map(c => JSON.stringify(c, (_, v) => (typeof v === 'function' ? '[fn]' : v)))
+    .join('|');
+  const cacheKey = `${collectionName}|${constraintsKey}`;
+
+  const constraintsRef = useRef(queryConstraints);
+  constraintsRef.current = queryConstraints;
+
+  useEffect(() => {
+    if (!collectionName) {
+      setDocuments([]);
+      setLoading(false);
+      return;
+    }
+
+    if (fetchTrigger === 0 && globalQueryCache.has(cacheKey)) {
+      setDocuments(globalQueryCache.get(cacheKey)! as T[]);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    const q = query(collection(db, collectionName), ...constraintsRef.current);
+    getDocs(q)
+      .then(snapshot => {
+        if (cancelled) return;
+        const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as T[];
+        globalQueryCache.set(cacheKey, docs);
+        setDocuments(docs);
+      })
+      .catch(err => {
+        if (cancelled) return;
+        console.error(`[useCachedFirestoreOnce] Error on collection "${collectionName}":`, err);
+        setError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectionName, constraintsKey, fetchTrigger]);
+
+  const refetch = useCallback(() => {
+    setFetchTrigger(t => t + 1);
+  }, []);
+
+  return { documents, loading, error, refetch };
+}
+
 /**
  * One-time single-document fetch hook.
  *
