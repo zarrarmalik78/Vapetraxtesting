@@ -6,7 +6,6 @@ import { DataProvider } from './contexts/DataContext';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import Sidebar from './components/layout/Sidebar';
 import ConnectivityBadge from './components/ui/ConnectivityBadge';
-import EidBanner from './components/ui/EidBanner';
 import PwaUpdatePrompt from './components/ui/PwaUpdatePrompt';
 import { useBackgroundTasks } from './hooks/useBackgroundTasks';
 
@@ -32,7 +31,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <Sidebar />
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 overflow-x-hidden">
         <div className="max-w-[1600px] mx-auto">
-          <EidBanner />
           {children}
         </div>
       </main>
