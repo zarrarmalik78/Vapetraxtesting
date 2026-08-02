@@ -7,7 +7,6 @@ import ProtectedRoute from './components/layout/ProtectedRoute';
 import Sidebar from './components/layout/Sidebar';
 import ConnectivityBadge from './components/ui/ConnectivityBadge';
 import PwaUpdatePrompt from './components/ui/PwaUpdatePrompt';
-import { useBackgroundTasks } from './hooks/useBackgroundTasks';
 
 // Pages
 import Login from './pages/Login';
@@ -23,9 +22,6 @@ import InventoryLogs from './pages/InventoryLogs';
 import Settings from './pages/Settings';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Run background tasks (daily summary + low stock checker) while authenticated
-  useBackgroundTasks();
-
   return (
     <div className="flex min-h-screen bg-content-bg">
       <Sidebar />
