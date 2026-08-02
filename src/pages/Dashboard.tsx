@@ -57,11 +57,9 @@ const getBusinessDay = (date: Date) => {
   return d;
 };
 
-// TEMPORARILY DISABLED - Dashboard optimization
-// To restore, simply delete the new Dashboard component at the bottom and rename this back to Dashboard
-const _Dashboard_TEMPORARILY_DISABLED: React.FC = () => {
+const Dashboard: React.FC = () => {
   const { shopId } = useAuth();
-
+  
   // Products from global memory cache (0 reads)
   const { products, productsLoading } = useData();
 
@@ -92,12 +90,12 @@ const _Dashboard_TEMPORARILY_DISABLED: React.FC = () => {
   targetEndDate.setHours(23, 59, 59, 999);
 
   // 1. Aggregations for historical charts/KPIs (Costs ~32 reads total!)
-  const {
-    weeklyRevenue,
-    weeklyProfit,
-    monthlyRevenue,
-    monthlyProfit,
-    trendData,
+  const { 
+    weeklyRevenue, 
+    weeklyProfit, 
+    monthlyRevenue, 
+    monthlyProfit, 
+    trendData, 
     loading: aggsLoading,
     refetch: refetchAggs
   } = useDashboardAggregations(shopId, currentBusinessDay, thisWeekBusiness, thisMonthBusiness);
@@ -153,18 +151,18 @@ const _Dashboard_TEMPORARILY_DISABLED: React.FC = () => {
 
   // Sales filtering by business day
   const periodRevenue = periodSales.reduce((acc, s) => acc + (s.totalAmount || 0), 0);
-
+  
   let periodProfit = periodSales.reduce((acc, s) => acc + (s.totalProfit || 0), 0);
   if (periodProfit === 0 && periodRevenue > 0) {
     // Fallback for older sales that might not have totalProfit saved
     periodProfit = periodRevenue - getSalesCogs(periodSales, products);
   }
 
-  const periodCash = periodSales.filter(s => s.paymentMethod === 'cash').reduce((acc, s) => acc + (s.totalAmount || 0), 0) +
-    periodSales.filter(s => s.paymentMethod === 'split').reduce((acc, s) => acc + (s.splitAmounts?.cash || 0), 0);
-  const periodOnline = periodSales.filter(s => (s.paymentMethod === 'online' || s.paymentMethod === 'credit')).reduce((acc, s) => acc + (s.totalAmount || 0), 0) +
-    periodSales.filter(s => s.paymentMethod === 'split').reduce((acc, s) => acc + (s.splitAmounts?.online || 0) + (s.splitAmounts?.credit || 0), 0);
-
+  const periodCash = periodSales.filter(s => s.paymentMethod === 'cash').reduce((acc, s) => acc + (s.totalAmount || 0), 0) + 
+                     periodSales.filter(s => s.paymentMethod === 'split').reduce((acc, s) => acc + (s.splitAmounts?.cash || 0), 0);
+  const periodOnline = periodSales.filter(s => (s.paymentMethod === 'online' || s.paymentMethod === 'credit')).reduce((acc, s) => acc + (s.totalAmount || 0), 0) + 
+                       periodSales.filter(s => s.paymentMethod === 'split').reduce((acc, s) => acc + (s.splitAmounts?.online || 0) + (s.splitAmounts?.credit || 0), 0);
+  
   const periodRecoveredCredit = periodCredits.filter(c => c.transactionType === 'taken').reduce((acc, c) => acc + (c.amount || 0), 0);
 
   const periodExpenseTotal = periodExpense.reduce((acc, e) => acc + (e.amount || 0), 0);
@@ -202,22 +200,22 @@ const _Dashboard_TEMPORARILY_DISABLED: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1 shadow-sm">
             <Calendar size={14} className="text-slate-400" />
-            <input
-              type="date"
+            <input 
+              type="date" 
               value={startDateStr}
               onChange={(e) => setStartDateStr(e.target.value)}
               className="bg-transparent text-xs font-bold text-slate-600 focus:outline-none"
             />
             <span className="text-slate-300">-</span>
-            <input
-              type="date"
+            <input 
+              type="date" 
               value={endDateStr}
               onChange={(e) => setEndDateStr(e.target.value)}
               className="bg-transparent text-xs font-bold text-slate-600 focus:outline-none"
             />
           </div>
           {(startDateStr || endDateStr) && (
-            <button
+            <button 
               onClick={() => { setStartDateStr(''); setEndDateStr(''); }}
               className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-rose-500 transition-colors"
             >
@@ -359,7 +357,7 @@ const _Dashboard_TEMPORARILY_DISABLED: React.FC = () => {
 
 
 
-        {/* Footer Badge */}
+      {/* Footer Badge */}
       </div>
       <div className="flex justify-center pt-4">
         <div className="bg-gradient-to-r from-violet-600 to-fuchsia-600 p-[1px] rounded-full shadow-lg shadow-violet-600/20">
@@ -384,21 +382,5 @@ const MetricCard: React.FC<{ title: string, value: string | number, icon: React.
     </div>
   </div>
 );
-
-// export default _Dashboard_TEMPORARILY_DISABLED;
-
-const Dashboard: React.FC = () => {
-  return (
-    <div className="flex flex-col items-center justify-center h-[70vh] animate-in fade-in duration-500">
-      <div className="text-center space-y-6 glass-card p-12 max-w-lg">
-        <div className="text-6xl mx-auto flex justify-center mb-4">🚧</div>
-        <h2 className="text-3xl font-bold text-slate-900">Dashboard Under Maintenance</h2>
-        <p className="text-slate-500 text-lg">
-          It'll be back soon!
-        </p>
-      </div>
-    </div>
-  );
-};
 
 export default Dashboard;

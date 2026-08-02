@@ -10,7 +10,7 @@ import PwaUpdatePrompt from './components/ui/PwaUpdatePrompt';
 
 // Pages
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
+// import Dashboard from './pages/Dashboard';
 import Stock from './pages/Stock';
 import NewSale from './pages/NewSale';
 import Sales from './pages/Sales';
@@ -60,7 +60,21 @@ function App() {
             
             <Route path="/dashboard" element={
               <ProtectedRoute requiredRole="admin">
-                <Layout><Dashboard /></Layout>
+                <Layout>
+                  <div className="flex flex-col items-center justify-center h-[70vh] animate-in fade-in duration-500">
+                    <div className="text-center space-y-6 glass-card p-12 max-w-lg">
+                      <div className="text-6xl mx-auto flex justify-center mb-4">🚧</div>
+                      <h2 className="text-3xl font-bold text-slate-900">Dashboard Locked</h2>
+                      <p className="text-slate-500 text-lg">
+                        We are currently doing some heavy lifting under the hood to completely eliminate Firestore limits.
+                      </p>
+                      <p className="text-slate-400 text-sm">
+                        The Dashboard is temporarily locked so your cashiers don't accidentally consume read quota.
+                        Check back soon!
+                      </p>
+                    </div>
+                  </div>
+                </Layout>
               </ProtectedRoute>
             } />
             

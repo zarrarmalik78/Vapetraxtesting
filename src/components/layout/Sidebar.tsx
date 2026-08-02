@@ -103,7 +103,7 @@ const Sidebar: React.FC = () => {
 
   const topNavItems = [
     { name: 'New Sale', path: '/', icon: ShoppingCart, roles: ['admin', 'cashier'] },
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
+    // { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
     { name: 'Products', path: '/stock', icon: Package, roles: ['admin', 'cashier'] },
     { name: 'Expenses', path: '/expenses', icon: DollarSign, roles: ['admin', 'cashier'] },
     { name: 'Credit / Customers', path: '/customers', icon: Users, roles: ['admin', 'cashier'] },
