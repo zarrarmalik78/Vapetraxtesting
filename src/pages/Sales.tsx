@@ -347,15 +347,79 @@ const Sales: React.FC = () => {
             </p>
           </div>
         </div>
+        
+        {/* New KPI: Total Profit */}
+        <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 shadow-lg shadow-amber-500/20 relative overflow-hidden group">
+          <div className="absolute top-4 right-4 p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform duration-300">
+            <TrendingUp size={24} className="text-white" />
+          </div>
+          <div className="relative z-10">
+            <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Total Profit</p>
+            <p className="text-3xl font-bold text-white">
+              {formatCurrency(sales.reduce((acc, s) => acc + (s.totalProfit || 0), 0))}
+            </p>
+          </div>
+        </div>
+
+        {/* New KPI: Cash Payments */}
+        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 shadow-lg shadow-emerald-500/20 relative overflow-hidden group">
+          <div className="absolute top-4 right-4 p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform duration-300">
+            <Banknote size={24} className="text-white" />
+          </div>
+          <div className="relative z-10">
+            <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Cash Payments</p>
+            <p className="text-3xl font-bold text-white">
+              {formatCurrency(
+                sales.filter(s => s.paymentMethod === 'cash').reduce((acc, s) => acc + (s.totalAmount || 0), 0) + 
+                sales.filter(s => s.paymentMethod === 'split').reduce((acc, s) => acc + (s.splitAmounts?.cash || 0), 0)
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* New KPI: Online Payments */}
+        <div className="bg-gradient-to-br from-sky-400 to-blue-500 rounded-2xl p-6 shadow-lg shadow-sky-500/20 relative overflow-hidden group">
+          <div className="absolute top-4 right-4 p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform duration-300">
+            <RefreshCw size={24} className="text-white" />
+          </div>
+          <div className="relative z-10">
+            <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Online Payments</p>
+            <p className="text-3xl font-bold text-white">
+              {formatCurrency(
+                sales.filter(s => s.paymentMethod === 'online').reduce((acc, s) => acc + (s.totalAmount || 0), 0) + 
+                sales.filter(s => s.paymentMethod === 'split').reduce((acc, s) => acc + (s.splitAmounts?.online || 0), 0)
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* Existing & New Credit/Return KPIs grouped nicely */}
         <div className="metric-card-orange rounded-2xl p-6 shadow-lg shadow-orange-500/20 relative overflow-hidden group">
           <div className="absolute top-4 right-4 p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform duration-300">
             <CreditCard size={24} className="text-white" />
           </div>
           <div className="relative z-10">
-            <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Credit Sales</p>
+            <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Credit Sales (#)</p>
             <p className="text-3xl font-bold text-white">{sales.filter(s => s.paymentMethod === 'credit').length}</p>
           </div>
         </div>
+
+        {/* New KPI: Credit Payments ($) */}
+        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 shadow-lg shadow-indigo-500/20 relative overflow-hidden group">
+          <div className="absolute top-4 right-4 p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform duration-300">
+            <CreditCard size={24} className="text-white" />
+          </div>
+          <div className="relative z-10">
+            <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Credit Payments ($)</p>
+            <p className="text-3xl font-bold text-white">
+              {formatCurrency(
+                sales.filter(s => s.paymentMethod === 'credit').reduce((acc, s) => acc + (s.totalAmount || 0), 0) + 
+                sales.filter(s => s.paymentMethod === 'split').reduce((acc, s) => acc + (s.splitAmounts?.credit || 0), 0)
+              )}
+            </p>
+          </div>
+        </div>
+
         <div className="metric-card-red rounded-2xl p-6 shadow-lg shadow-rose-500/20 relative overflow-hidden group">
           <div className="absolute top-4 right-4 p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform duration-300">
             <RotateCcw size={24} className="text-white" />
