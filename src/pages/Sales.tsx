@@ -47,35 +47,18 @@ const Sales: React.FC = () => {
     start: format(new Date(), 'yyyy-MM-dd'),
     end: format(new Date(), 'yyyy-MM-dd')
   });
-  const [activePreset, setActivePreset] = useState<string>('recent');
-
-  const queryConstraints = useMemo(() => {
-    if (!shopId) return [];
-    const constraints: any[] = [
-      where('shopId', '==', shopId),
-      firestoreOrderBy('saleDate', 'desc')
-    ];
-    if (activePreset !== 'recent') {
-      constraints.push(
-        where('saleDate', '>=', startOfDay(new Date(dateRange.start))),
-        where('saleDate', '<=', endOfDay(new Date(dateRange.end)))
-      );
-    }
-    constraints.push(limit(activePreset === 'recent' ? 10 : 500));
-    return constraints;
-  }, [shopId, activePreset, dateRange]);
+  const [activePreset, setActivePreset] = useState<string>('today');
 
   const { documents: sales, loading, refetch: refetchSales } = useFirestoreOnce<any>(
     hasSearched && shopId ? 'sales' : null, 
-    ...queryConstraints
+    where('shopId', '==', shopId),
+    where('saleDate', '>=', startOfDay(new Date(dateRange.start))),
+    where('saleDate', '<=', endOfDay(new Date(dateRange.end))),
+    firestoreOrderBy('saleDate', 'desc'),
+    limit(500)
   );
 
   const handlePreset = (preset: string) => {
-    if (preset === 'recent') {
-      setActivePreset('recent');
-      return;
-    }
-
     const today = new Date();
     let start = new Date(today);
     let end = new Date(today);
@@ -451,7 +434,7 @@ const Sales: React.FC = () => {
       {/* Filters & Search */}
       <div className="glass-card p-4 space-y-4">
         <div className="flex flex-wrap items-center gap-2">
-          {['recent', 'today', 'yesterday', 'last7', 'last30', 'complete'].map(preset => (
+          {['today', 'yesterday', 'last7', 'last30', 'complete'].map(preset => (
             <button
               key={preset}
               onClick={() => handlePreset(preset)}
@@ -460,7 +443,7 @@ const Sales: React.FC = () => {
                 activePreset === preset ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20" : "bg-slate-50 text-slate-500 hover:bg-slate-100"
               )}
             >
-              {preset === 'recent' ? 'Last 10' : preset === 'last7' ? 'Last 7 Days' : preset === 'last30' ? 'Last 30 Days' : preset}
+              {preset === 'last7' ? 'Last 7 Days' : preset === 'last30' ? 'Last 30 Days' : preset}
             </button>
           ))}
         </div>
